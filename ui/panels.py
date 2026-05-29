@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-# ── 판정별 컬러 설정 (Apple 단일 강조색 원칙 응용) ──────────────────────
+# ── 판정별 컬러 설정 ─────────────────────────────────────────────────────────
 _VERDICT_CFG: dict[str, dict] = {
     "강력 매수": {"color": "#0a8a0a", "bg": "#f0faf0", "border": "#a5d6a7"},
     "매수 고려": {"color": "#4caf50", "bg": "#f5fbf5", "border": "#c8e6c9"},
@@ -15,20 +15,16 @@ _SCORE_MAX = 9.5
 
 
 def _pct(score: float) -> float:
-    """점수(-9.5 ~ +9.5)를 게이지 백분율(0~100)로 변환."""
     clamped = max(_SCORE_MIN, min(_SCORE_MAX, score))
     return (clamped - _SCORE_MIN) / (_SCORE_MAX - _SCORE_MIN) * 100
 
 
 def _gauge_html(score: float) -> str:
-    """가로형 컬러 게이지 바 + 바늘 HTML 반환."""
     pct = _pct(score)
-
-    # 구간 경계 (%)
-    p_n5 = _pct(-5)  # 23.7 %
-    p_n2 = _pct(-2)  # 39.5 %
-    p_p2 = _pct(2)   # 60.5 %
-    p_p5 = _pct(5)   # 76.3 %
+    p_n5 = _pct(-5)
+    p_n2 = _pct(-2)
+    p_p2 = _pct(2)
+    p_p5 = _pct(5)
 
     gradient = (
         f"linear-gradient(to right,"
@@ -39,7 +35,6 @@ def _gauge_html(score: float) -> str:
         f"#0a8a0a {p_p5:.1f}%,#0a8a0a 100%)"
     )
 
-    # (left%, label, translateX transform)
     labels = [
         (0,     "−9.5", "translateX(0)"),
         (p_n5,  "−5",   "translateX(-50%)"),
@@ -55,27 +50,23 @@ def _gauge_html(score: float) -> str:
         for p, lbl, tx in labels
     )
 
-    return f"""
-    <div style="margin:20px 0 8px;padding:0 2px;">
-      <div style="position:relative;height:12px;border-radius:6px;
-           background:{gradient};overflow:visible;">
-        <div style="
-          position:absolute;left:{pct:.1f}%;top:-7px;
-          transform:translateX(-50%);
-          width:3px;height:26px;
-          background:#1d1d1f;border-radius:2px;
-          box-shadow:0 1px 5px rgba(0,0,0,0.28);
-        "></div>
-      </div>
-      <div style="position:relative;height:18px;margin-top:5px;">
-        {label_spans}
-      </div>
-    </div>
-    """
+    return (
+        f'<div style="margin:20px 0 8px;padding:0 2px;">'
+        f'<div style="position:relative;height:12px;border-radius:6px;'
+        f'background:{gradient};overflow:visible;">'
+        f'<div style="position:absolute;left:{pct:.1f}%;top:-7px;'
+        f'transform:translateX(-50%);width:3px;height:26px;'
+        f'background:#1d1d1f;border-radius:2px;'
+        f'box-shadow:0 1px 5px rgba(0,0,0,0.28);"></div>'
+        f'</div>'
+        f'<div style="position:relative;height:18px;margin-top:5px;">'
+        f'{label_spans}'
+        f'</div>'
+        f'</div>'
+    )
 
 
 def render_signal_card(signal: dict, source: str, analyzed_at: str = "") -> None:
-    """Apple 스타일 종합 신호 카드 + 게이지 바 표시."""
     verdict = signal["verdict"]
     score = signal["score"]
     cfg = _VERDICT_CFG.get(verdict, _VERDICT_CFG["중립/관망"])
@@ -87,72 +78,45 @@ def render_signal_card(signal: dict, source: str, analyzed_at: str = "") -> None
     )
 
     st.markdown(
-        f"""
-        <div style="
-          background:{bg};
-          border:1.5px solid {border};
-          border-radius:18px;
-          padding:24px 26px 18px;
-          margin-bottom:12px;
-          font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-        ">
-          <!-- 판정 헤드라인 -->
-          <div style="font-size:13px;font-weight:600;color:#aaa;
-               letter-spacing:0.6px;text-transform:uppercase;margin-bottom:4px;">
-            종합 판정
-          </div>
-          <div style="font-size:30px;font-weight:600;color:{color};
-               letter-spacing:-0.3px;line-height:1.1;">
-            {verdict}
-          </div>
-
-          <!-- 게이지 바 -->
-          {_gauge_html(score)}
-
-          <!-- 점수 + 메타 구분선 -->
-          <div style="
-            display:flex;justify-content:space-between;align-items:flex-end;
-            margin-top:14px;padding-top:12px;
-            border-top:1px solid {border};
-          ">
-            <div>
-              <div style="font-size:11px;color:#aaa;margin-bottom:2px;letter-spacing:0.4px;">
-                종합점수
-              </div>
-              <div style="font-size:24px;font-weight:600;color:{color};
-                   letter-spacing:-0.24px;line-height:1;">
-                {score:+.1f}
-                <span style="font-size:13px;font-weight:400;color:#bbb;">&nbsp;/ ±9.5</span>
-              </div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-size:11px;color:#bbb;">데이터 &nbsp;{source}</div>
-              {time_row}
-            </div>
-          </div>
-        </div>
-        """,
+        f'<div style="background:{bg};border:1.5px solid {border};border-radius:18px;'
+        f'padding:24px 26px 18px;margin-bottom:12px;'
+        f'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">'
+        f'<div style="font-size:13px;font-weight:600;color:#aaa;'
+        f'letter-spacing:0.6px;text-transform:uppercase;margin-bottom:4px;">종합 판정</div>'
+        f'<div style="font-size:30px;font-weight:600;color:{color};'
+        f'letter-spacing:-0.3px;line-height:1.1;">{verdict}</div>'
+        f'{_gauge_html(score)}'
+        f'<div style="display:flex;justify-content:space-between;align-items:flex-end;'
+        f'margin-top:14px;padding-top:12px;border-top:1px solid {border};">'
+        f'<div>'
+        f'<div style="font-size:11px;color:#aaa;margin-bottom:2px;letter-spacing:0.4px;">종합점수</div>'
+        f'<div style="font-size:24px;font-weight:600;color:{color};'
+        f'letter-spacing:-0.24px;line-height:1;">{score:+.1f}'
+        f'<span style="font-size:13px;font-weight:400;color:#bbb;">&nbsp;/ ±9.5</span></div>'
+        f'</div>'
+        f'<div style="text-align:right;">'
+        f'<div style="font-size:11px;color:#bbb;">데이터 &nbsp;{source}</div>'
+        f'{time_row}'
+        f'</div>'
+        f'</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
 
 def render_reasons_table(signal: dict) -> None:
-    """지표별 점수 근거 테이블 (Apple 스타일 섹션 헤더 포함)."""
     st.markdown(
         '<div style="font-size:13px;font-weight:600;color:#aaa;'
         'letter-spacing:0.6px;text-transform:uppercase;'
         'margin:4px 0 8px;font-family:system-ui,-apple-system,sans-serif;">'
-        "지표별 근거"
-        "</div>",
+        "지표별 근거</div>",
         unsafe_allow_html=True,
     )
-
     reasons = signal.get("reasons", [])
     if not reasons:
         st.markdown(
             '<p style="color:#bbb;font-size:14px;text-align:center;padding:12px 0;">'
-            "뚜렷한 매수/매도 신호 없음 (중립)"
-            "</p>",
+            "뚜렷한 매수/매도 신호 없음 (중립)</p>",
             unsafe_allow_html=True,
         )
         return

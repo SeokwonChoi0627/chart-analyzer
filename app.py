@@ -55,20 +55,20 @@ div[data-testid="stAlert"] {
     border-radius: 12px !important;
 }
 
-/* ── 버튼 ── */
-div.stButton > button {
+/* ── 폼 제출 버튼 (Enter 키 포함) ── */
+div.stFormSubmitButton > button {
     border-radius: 9999px !important;
+    background-color: #0066cc !important;
+    color: #ffffff !important;
+    border: none !important;
     font-weight: 400;
     letter-spacing: -0.1px;
+    width: 100%;
 }
-div.stButton > button[kind="primary"] {
-    background-color: #0066cc !important;
-    border: none !important;
-}
-div.stButton > button[kind="primary"]:hover {
+div.stFormSubmitButton > button:hover {
     background-color: #0071e3 !important;
 }
-div.stButton > button[kind="primary"]:active {
+div.stFormSubmitButton > button:active {
     transform: scale(0.96);
 }
 </style>
@@ -81,12 +81,13 @@ def main():
 
     with st.sidebar:
         st.header("설정")
-        symbol = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
-        period_label = st.selectbox("기간", list(PERIOD_MAP.keys()), index=1)
-        st.divider()
-        st.caption("자동 조회 실패 시 아래로 업로드")
-        uploaded = st.file_uploader("엑셀/CSV 업로드", type=["xlsx", "xls", "csv"])
-        run = st.button("분석 실행", type="primary", use_container_width=True)
+        with st.form("analysis_form"):
+            symbol = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
+            period_label = st.selectbox("기간", list(PERIOD_MAP.keys()), index=1)
+            st.divider()
+            st.caption("자동 조회 실패 시 아래로 업로드")
+            uploaded = st.file_uploader("엑셀/CSV 업로드", type=["xlsx", "xls", "csv"])
+            run = st.form_submit_button("분석 실행", use_container_width=True)
 
     if not run:
         st.info("좌측에서 종목을 입력하고 '분석 실행'을 누르세요.")
