@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from core.indicators import add_sma
+from core.indicators import add_sma, add_rsi
 
 
 def _make_df(closes):
@@ -29,3 +29,20 @@ def test_sma_does_not_mutate_input():
     df = _make_df([1, 2, 3, 4, 5])
     add_sma(df, windows=(5,))
     assert "sma5" not in df.columns
+
+
+def test_add_rsi_column_and_range():
+    closes = list(range(1, 30))
+    df = _make_df(closes)
+    out = add_rsi(df, period=14)
+    assert "rsi" in out.columns
+    last = out["rsi"].iloc[-1]
+    assert 0 <= last <= 100
+    assert last > 70
+
+
+def test_rsi_all_down_is_low():
+    closes = list(range(30, 1, -1))
+    df = _make_df(closes)
+    out = add_rsi(df, period=14)
+    assert out["rsi"].iloc[-1] < 30
