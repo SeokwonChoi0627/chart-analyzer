@@ -26,7 +26,57 @@ def get_cache() -> OhlcvCache:
     return OhlcvCache(CACHE_PATH)
 
 
+_CSS = """
+<style>
+/* ── 전체 폰트: SF Pro 대체 스택 ── */
+html, body, [class*="css"] {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont,
+                 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: #1d1d1f;
+}
+
+/* ── 사이드바: Apple parchment 배경 ── */
+section[data-testid="stSidebar"] {
+    background-color: #f5f5f7 !important;
+}
+section[data-testid="stSidebar"] * {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── 메인 타이틀 ── */
+h1 {
+    font-weight: 600 !important;
+    letter-spacing: -0.28px !important;
+    color: #1d1d1f !important;
+}
+
+/* ── 알림 박스 ── */
+div[data-testid="stAlert"] {
+    border-radius: 12px !important;
+}
+
+/* ── 버튼 ── */
+div.stButton > button {
+    border-radius: 9999px !important;
+    font-weight: 400;
+    letter-spacing: -0.1px;
+}
+div.stButton > button[kind="primary"] {
+    background-color: #0066cc !important;
+    border: none !important;
+}
+div.stButton > button[kind="primary"]:hover {
+    background-color: #0071e3 !important;
+}
+div.stButton > button[kind="primary"]:active {
+    transform: scale(0.96);
+}
+</style>
+"""
+
+
 def main():
+    st.markdown(_CSS, unsafe_allow_html=True)
     st.title("📈 차트 분석 매수/매도 추천기")
 
     with st.sidebar:
