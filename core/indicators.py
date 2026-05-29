@@ -20,3 +20,14 @@ def add_rsi(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     rs = avg_gain / avg_loss
     out["rsi"] = 100 - (100 / (1 + rs))
     return out
+
+
+def add_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
+    """MACD/시그널/히스토그램 컬럼 추가. 원본 불변."""
+    out = df.copy()
+    ema_fast = out["close"].ewm(span=fast, adjust=False).mean()
+    ema_slow = out["close"].ewm(span=slow, adjust=False).mean()
+    out["macd"] = ema_fast - ema_slow
+    out["macd_signal"] = out["macd"].ewm(span=signal, adjust=False).mean()
+    out["macd_hist"] = out["macd"] - out["macd_signal"]
+    return out

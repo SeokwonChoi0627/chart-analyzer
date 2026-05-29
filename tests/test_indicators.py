@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from core.indicators import add_sma, add_rsi
+from core.indicators import add_sma, add_rsi, add_macd
 
 
 def _make_df(closes):
@@ -46,3 +46,20 @@ def test_rsi_all_down_is_low():
     df = _make_df(closes)
     out = add_rsi(df, period=14)
     assert out["rsi"].iloc[-1] < 30
+
+
+def test_add_macd_columns():
+    closes = list(range(1, 60))
+    df = _make_df(closes)
+    out = add_macd(df, fast=12, slow=26, signal=9)
+    assert "macd" in out.columns
+    assert "macd_signal" in out.columns
+    assert "macd_hist" in out.columns
+
+
+def test_macd_hist_is_macd_minus_signal():
+    closes = list(range(1, 60))
+    df = _make_df(closes)
+    out = add_macd(df)
+    row = out.iloc[-1]
+    assert abs(row["macd_hist"] - (row["macd"] - row["macd_signal"])) < 1e-9
