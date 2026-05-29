@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from core.indicators import add_sma, add_rsi, add_macd, add_bollinger
+from core.indicators import add_sma, add_rsi, add_macd, add_bollinger, add_volume_ratio, compute_all
 
 
 def _make_df(closes):
@@ -75,3 +75,24 @@ def test_add_bollinger_columns_and_order():
     assert "bb_lower" in out.columns
     row = out.iloc[-1]
     assert row["bb_lower"] < row["bb_mid"] < row["bb_upper"]
+
+
+def test_add_volume_ratio():
+    idx = pd.date_range("2024-01-01", periods=21, freq="D")
+    vols = [1000] * 20 + [3000]
+    df = pd.DataFrame({
+        "open": [10]*21, "high": [10]*21, "low": [10]*21,
+        "close": [10]*21, "volume": vols,
+    }, index=idx)
+    out = add_volume_ratio(df, window=20)
+    assert "vol_ratio" in out.columns
+    assert abs(out["vol_ratio"].iloc[-1] - 3.0) < 1e-9
+
+
+def test_compute_all_adds_every_indicator():
+    closes = list(range(1, 80))
+    df = _make_df(closes)
+    out = compute_all(df)
+    for col in ["sma5", "sma20", "sma60", "rsi", "macd",
+                "macd_signal", "macd_hist", "bb_upper", "bb_lower", "vol_ratio"]:
+        assert col in out.columns

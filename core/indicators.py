@@ -42,3 +42,21 @@ def add_bollinger(df: pd.DataFrame, window: int = 20, num_std: float = 2.0) -> p
     out["bb_upper"] = mid + num_std * std
     out["bb_lower"] = mid - num_std * std
     return out
+
+
+def add_volume_ratio(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+    """당일 거래량 / 직전 window일 평균 거래량(당일 제외) 비율. 원본 불변."""
+    out = df.copy()
+    prev_avg = out["volume"].rolling(window=window).mean().shift(1)
+    out["vol_ratio"] = out["volume"] / prev_avg
+    return out
+
+
+def compute_all(df: pd.DataFrame) -> pd.DataFrame:
+    """모든 지표를 순서대로 적용한 DataFrame 반환. 원본 불변."""
+    out = add_sma(df, windows=(5, 20, 60))
+    out = add_rsi(out, period=14)
+    out = add_macd(out, fast=12, slow=26, signal=9)
+    out = add_bollinger(out, window=20, num_std=2.0)
+    out = add_volume_ratio(out, window=20)
+    return out
