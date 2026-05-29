@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from core.indicators import add_sma, add_rsi, add_macd
+from core.indicators import add_sma, add_rsi, add_macd, add_bollinger
 
 
 def _make_df(closes):
@@ -63,3 +63,15 @@ def test_macd_hist_is_macd_minus_signal():
     out = add_macd(df)
     row = out.iloc[-1]
     assert abs(row["macd_hist"] - (row["macd"] - row["macd_signal"])) < 1e-9
+
+
+def test_add_bollinger_columns_and_order():
+    closes = [100, 102, 98, 101, 99, 103, 97, 100, 105, 95,
+              100, 102, 98, 101, 99, 103, 97, 100, 105, 95]
+    df = _make_df(closes)
+    out = add_bollinger(df, window=20, num_std=2)
+    assert "bb_mid" in out.columns
+    assert "bb_upper" in out.columns
+    assert "bb_lower" in out.columns
+    row = out.iloc[-1]
+    assert row["bb_lower"] < row["bb_mid"] < row["bb_upper"]

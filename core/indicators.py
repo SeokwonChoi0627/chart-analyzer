@@ -31,3 +31,14 @@ def add_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) 
     out["macd_signal"] = out["macd"].ewm(span=signal, adjust=False).mean()
     out["macd_hist"] = out["macd"] - out["macd_signal"]
     return out
+
+
+def add_bollinger(df: pd.DataFrame, window: int = 20, num_std: float = 2.0) -> pd.DataFrame:
+    """볼린저밴드(중심/상단/하단) 컬럼 추가. 원본 불변."""
+    out = df.copy()
+    mid = out["close"].rolling(window=window).mean()
+    std = out["close"].rolling(window=window).std()
+    out["bb_mid"] = mid
+    out["bb_upper"] = mid + num_std * std
+    out["bb_lower"] = mid - num_std * std
+    return out
