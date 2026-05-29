@@ -7,10 +7,12 @@ from dotenv import load_dotenv
 from core.cache import OhlcvCache
 from core.data.orchestrator import fetch, DataUnavailableError
 from core.data.excel import parse_ohlcv_frame
+from core.data.intraday import fetch_15min
+from core.data.base import detect_market
 from core.indicators import compute_all
-from core.signals import generate_signal
-from ui.chart import build_chart
-from ui.panels import render_signal_card, render_reasons_table
+from core.signals import generate_signal, generate_intraday_signal
+from ui.chart import build_chart, build_intraday_chart
+from ui.panels import render_signal_card, render_reasons_table, render_intraday_panel
 
 load_dotenv()
 
@@ -129,13 +131,32 @@ def main():
     signal = generate_signal(enriched)
     analyzed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    # 15분봉 단기 신호 (업로드 모드는 스킵)
+    signal_15m = None
+    df_15m = pd.DataFrame()
+    if uploaded is None and symbol.strip():
+        market = detect_market(symbol.strip())
+        with st.spinner("15분봉 데이터 조회 중…"):
+            df_15m = fetch_15min(symbol.strip(), market, days=5)
+        if not df_15m.empty:
+            enriched_15m = compute_all(df_15m)
+            signal_15m = generate_intraday_signal(enriched_15m)
+
     title = symbol.strip() or (uploaded.name if uploaded else "")
     col1, col2 = st.columns([1, 2])
     with col1:
         render_signal_card(signal, source, analyzed_at)
+        if signal_15m is not None:
+            render_intraday_panel(signal_15m)
         render_reasons_table(signal)
     with col2:
         st.plotly_chart(build_chart(enriched, title), use_container_width=True)
+        if not df_15m.empty:
+            with st.expander("📊 15분봉 차트 보기", expanded=False):
+                st.plotly_chart(
+                    build_intraday_chart(compute_all(df_15m), title),
+                    use_container_width=True,
+                )
 
 
 if __name__ == "__main__":

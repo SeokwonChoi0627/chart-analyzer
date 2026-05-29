@@ -104,6 +104,75 @@ def render_signal_card(signal: dict, source: str, analyzed_at: str = "") -> None
     )
 
 
+_INTRADAY_CFG: dict[str, dict] = {
+    "단기 매수 타이밍": {"color": "#0a8a0a", "bg": "#f0faf0", "border": "#a5d6a7"},
+    "단기 상승 기조":   {"color": "#4caf50", "bg": "#f5fbf5", "border": "#c8e6c9"},
+    "단기 중립":        {"color": "#757575", "bg": "#fafafa", "border": "#e0e0e0"},
+    "단기 하락 기조":   {"color": "#f4511e", "bg": "#fff8f6", "border": "#ffccbc"},
+    "단기 매도 타이밍": {"color": "#c62828", "bg": "#fff5f5", "border": "#ef9a9a"},
+    "데이터 부족":      {"color": "#9e9e9e", "bg": "#f9f9f9", "border": "#e0e0e0"},
+}
+
+
+def _intraday_gauge_html(score: float) -> str:
+    pct = (max(-3.0, min(3.0, score)) + 3.0) / 6.0 * 100
+    return (
+        f'<div style="margin:10px 0 6px;">'
+        f'<div style="position:relative;height:8px;border-radius:4px;'
+        f'background:linear-gradient(to right,'
+        f'#c62828 0%,#f4511e 33%,#d9d9d9 44%,#d9d9d9 56%,#4caf50 67%,#0a8a0a 100%);'
+        f'overflow:visible;">'
+        f'<div style="position:absolute;left:{pct:.1f}%;top:-5px;'
+        f'transform:translateX(-50%);width:3px;height:18px;'
+        f'background:#1d1d1f;border-radius:2px;'
+        f'box-shadow:0 1px 4px rgba(0,0,0,0.25);"></div>'
+        f'</div>'
+        f'<div style="display:flex;justify-content:space-between;'
+        f'margin-top:4px;font-size:9px;color:#ccc;">'
+        f'<span>−3.0</span><span>0</span><span>+3.0</span>'
+        f'</div>'
+        f'</div>'
+    )
+
+
+def render_intraday_panel(signal_15m: dict) -> None:
+    """15분봉 단기 신호 카드 + 지표 테이블."""
+    verdict = signal_15m.get("verdict", "데이터 부족")
+    score   = signal_15m.get("score", 0.0)
+    last_time = signal_15m.get("last_time", "")
+    cfg = _INTRADAY_CFG.get(verdict, _INTRADAY_CFG["데이터 부족"])
+    color, bg, border = cfg["color"], cfg["bg"], cfg["border"]
+
+    time_note = (
+        f'<span style="font-size:10px;color:#bbb;margin-left:8px;">{last_time}</span>'
+        if last_time else ""
+    )
+
+    st.markdown(
+        f'<div style="background:{bg};border:1px solid {border};border-radius:14px;'
+        f'padding:16px 20px 12px;margin-bottom:12px;'
+        f'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">'
+        f'<div style="font-size:11px;font-weight:600;color:#aaa;'
+        f'letter-spacing:0.6px;text-transform:uppercase;margin-bottom:3px;">'
+        f'15분봉 단기 신호</div>'
+        f'<div style="font-size:20px;font-weight:600;color:{color};'
+        f'letter-spacing:-0.2px;">{verdict}{time_note}</div>'
+        f'{_intraday_gauge_html(score)}'
+        f'<div style="font-size:12px;color:{color};font-weight:600;">'
+        f'단기 점수 {score:+.2f} / ±3.0</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    reasons = signal_15m.get("reasons", [])
+    if reasons:
+        table = pd.DataFrame(reasons).rename(columns={
+            "indicator": "지표", "signal": "신호", "score": "점수", "note": "근거",
+        })
+        table["점수"] = table["점수"].map(lambda v: f"{v:+.1f}")
+        st.dataframe(table, hide_index=True, use_container_width=True)
+
+
 def render_reasons_table(signal: dict) -> None:
     st.markdown(
         '<div style="font-size:13px;font-weight:600;color:#aaa;'

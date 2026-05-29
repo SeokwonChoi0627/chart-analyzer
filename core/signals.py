@@ -105,3 +105,89 @@ def generate_signal(df: pd.DataFrame) -> dict:
                             "score": -W_VOL, "note": f"거래량 {vr:.1f}배 급증 + 하락"})
 
     return {"score": round(score, 2), "verdict": classify(score), "reasons": reasons}
+
+
+# ── 15분봉 단기 신호 ──────────────────────────────────────────────────────────
+
+_W_INTRA_RSI  = 1.5
+_W_INTRA_MACD = 1.0
+_W_INTRA_VOL  = 0.5   # 총 범위 ±3.0
+
+
+def _classify_intraday(score: float) -> str:
+    if score >= 2.0:
+        return "단기 매수 타이밍"
+    if score >= 0.5:
+        return "단기 상승 기조"
+    if score > -0.5:
+        return "단기 중립"
+    if score > -2.0:
+        return "단기 하락 기조"
+    return "단기 매도 타이밍"
+
+
+def generate_intraday_signal(df: pd.DataFrame) -> dict:
+    """
+    15분봉 compute_all 결과를 받아 단기 보조 신호 생성.
+    점수 범위: ±3.0 (RSI ±1.5 / MACD ±1.0 / 거래량 ±0.5)
+    """
+    if df.empty or len(df) < 26:
+        return {"score": 0.0, "verdict": "데이터 부족", "reasons": [],
+                "last_price": None, "last_time": ""}
+
+    last = df.iloc[-1]
+    score = 0.0
+    reasons: list[dict] = []
+
+    # 1) RSI (±1.5)
+    rsi = last.get("rsi")
+    if _safe(rsi):
+        if rsi <= 30:
+            score += _W_INTRA_RSI
+            reasons.append({"indicator": "RSI(15분)", "signal": "과매도",
+                             "score": _W_INTRA_RSI,
+                             "note": f"RSI {rsi:.0f} → 단기 반등 구간"})
+        elif rsi >= 70:
+            score -= _W_INTRA_RSI
+            reasons.append({"indicator": "RSI(15분)", "signal": "과매수",
+                             "score": -_W_INTRA_RSI,
+                             "note": f"RSI {rsi:.0f} → 단기 과열 구간"})
+
+    # 2) MACD 히스토그램 방향 (±1.0)
+    hist = last.get("macd_hist")
+    if _safe(hist):
+        if hist > 0:
+            score += _W_INTRA_MACD
+            reasons.append({"indicator": "MACD(15분)", "signal": "상승",
+                             "score": _W_INTRA_MACD,
+                             "note": f"히스토그램 {hist:+.4f} → 단기 상승 우위"})
+        elif hist < 0:
+            score -= _W_INTRA_MACD
+            reasons.append({"indicator": "MACD(15분)", "signal": "하락",
+                             "score": -_W_INTRA_MACD,
+                             "note": f"히스토그램 {hist:+.4f} → 단기 하락 우위"})
+
+    # 3) 거래량 동반 (±0.5)
+    vr = last.get("vol_ratio")
+    if _safe(vr) and vr >= 1.5:
+        if last["close"] >= last["open"]:
+            score += _W_INTRA_VOL
+            reasons.append({"indicator": "거래량(15분)", "signal": "급증+양봉",
+                             "score": _W_INTRA_VOL,
+                             "note": f"거래량 {vr:.1f}배 급증 · 양봉"})
+        else:
+            score -= _W_INTRA_VOL
+            reasons.append({"indicator": "거래량(15분)", "signal": "급증+음봉",
+                             "score": -_W_INTRA_VOL,
+                             "note": f"거래량 {vr:.1f}배 급증 · 음봉"})
+
+    last_price = float(last["close"]) if _safe(last.get("close")) else None
+    last_time = str(df.index[-1])[:16]
+
+    return {
+        "score":       round(score, 2),
+        "verdict":     _classify_intraday(score),
+        "reasons":     reasons,
+        "last_price":  last_price,
+        "last_time":   last_time,
+    }
