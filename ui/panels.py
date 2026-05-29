@@ -10,10 +10,14 @@ _VERDICT_STYLE = {
 }
 
 
-def render_signal_card(signal: dict, source: str) -> None:
+def render_signal_card(signal: dict, source: str, analyzed_at: str = "") -> None:
     """종합 신호 카드 표시."""
     verdict = signal["verdict"]
     emoji, color = _VERDICT_STYLE.get(verdict, ("⚪", "#9e9e9e"))
+    time_line = (
+        f'<div style="font-size:12px; color:#999; margin-top:4px;">분석 시점: {analyzed_at}</div>'
+        if analyzed_at else ""
+    )
     st.markdown(
         f"""
         <div style="border:2px solid {color}; border-radius:12px;
@@ -27,6 +31,7 @@ def render_signal_card(signal: dict, source: str) -> None:
             <div style="font-size:12px; color:#999; margin-top:4px;">
                 데이터 소스: {source}
             </div>
+            {time_line}
         </div>
         """,
         unsafe_allow_html=True,

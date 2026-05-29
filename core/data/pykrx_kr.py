@@ -31,9 +31,17 @@ class PykrxProvider(DataProvider):
     def _name_to_ticker(name: str) -> str | None:
         try:
             listing = fdr.StockListing("KRX")
+            # 1순위: 정확한 일치
             matched = listing[listing["Name"] == name]
             if not matched.empty:
                 return matched.iloc[0]["Code"]
+            # 2순위: 포함 검색 (예: "하이닉스" → "SK하이닉스")
+            matched = listing[listing["Name"].str.contains(name, na=False)]
+            if not matched.empty:
+                # 이름이 짧을수록 더 정확한 매칭 → 최단 이름 우선
+                matched = matched.copy()
+                matched["_len"] = matched["Name"].str.len()
+                return matched.sort_values("_len").iloc[0]["Code"]
         except Exception:
             pass
         return None

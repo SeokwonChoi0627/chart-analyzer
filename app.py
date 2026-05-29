@@ -1,5 +1,5 @@
 import os
-from datetime import date
+from datetime import date, datetime
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
@@ -76,11 +76,12 @@ def main():
 
     enriched = compute_all(df)
     signal = generate_signal(enriched)
+    analyzed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     title = symbol.strip() or (uploaded.name if uploaded else "")
     col1, col2 = st.columns([1, 2])
     with col1:
-        render_signal_card(signal, source)
+        render_signal_card(signal, source, analyzed_at)
         render_reasons_table(signal)
     with col2:
         st.plotly_chart(build_chart(enriched, title), use_container_width=True)
