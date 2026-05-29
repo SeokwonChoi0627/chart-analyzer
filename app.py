@@ -134,7 +134,9 @@ def main():
     # 15분봉 단기 신호 (업로드 모드는 스킵)
     signal_15m = None
     df_15m = pd.DataFrame()
+    fetch_15m_tried = False
     if uploaded is None and symbol.strip():
+        fetch_15m_tried = True
         market = detect_market(symbol.strip())
         with st.spinner("15분봉 데이터 조회 중…"):
             df_15m = fetch_15min(symbol.strip(), market, days=5)
@@ -146,9 +148,27 @@ def main():
     col1, col2 = st.columns([1, 2])
     with col1:
         render_signal_card(signal, source, analyzed_at)
+
+        # 15분봉 패널 (성공 시 신호 카드, 실패 시 안내)
         if signal_15m is not None:
             render_intraday_panel(signal_15m)
+        elif fetch_15m_tried:
+            st.markdown(
+                '<div style="border:1px dashed #e0e0e0;border-radius:14px;'
+                'padding:14px 18px;margin-bottom:12px;text-align:center;'
+                'font-family:system-ui,-apple-system,sans-serif;">'
+                '<div style="font-size:11px;font-weight:600;color:#aaa;'
+                'letter-spacing:0.6px;text-transform:uppercase;margin-bottom:4px;">'
+                '15분봉 단기 신호</div>'
+                '<div style="font-size:13px;color:#bbb;">'
+                '⚠️ 15분봉 데이터를 가져올 수 없습니다<br>'
+                '<span style="font-size:11px;">네트워크 또는 SSL 환경 문제일 수 있습니다</span>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+
         render_reasons_table(signal)
+
     with col2:
         st.plotly_chart(build_chart(enriched, title), use_container_width=True)
         if not df_15m.empty:
