@@ -24,12 +24,13 @@ def _to_yahoo_symbols(symbol: str, market: str) -> list[str]:
 def _fetch_one(yf_symbol: str, days: int) -> pd.DataFrame:
     range_ = f"{min(days, 7)}d"
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_symbol}"
-    resp = requests.get(
-        url,
-        params={"interval": "15m", "range": range_},
-        headers=_HEADERS,
-        timeout=10,
-    )
+    params = {"interval": "15m", "range": range_}
+    try:
+        resp = requests.get(url, params=params, headers=_HEADERS, timeout=10)
+    except requests.exceptions.SSLError:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        resp = requests.get(url, params=params, headers=_HEADERS, timeout=10, verify=False)
     resp.raise_for_status()
     data = resp.json()
 
