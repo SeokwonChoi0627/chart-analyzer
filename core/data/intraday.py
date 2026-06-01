@@ -37,12 +37,40 @@ _YF_BASE_URLS = [
 ]
 
 
+# ── 한글 종목명 → 종목코드 변환 ──────────────────────────────────────────────
+
+def _resolve_kr_code(symbol: str) -> str:
+    """
+    한글 종목명(또는 부분명)을 6자리 종목코드로 변환.
+    이미 숫자 코드이거나 변환 실패 시 원본 반환.
+    """
+    if symbol.isdigit():
+        return symbol
+    try:
+        import FinanceDataReader as fdr
+        listing = fdr.StockListing("KRX")
+        # 정확히 일치
+        matched = listing[listing["Name"] == symbol]
+        if not matched.empty:
+            return str(matched.iloc[0]["Code"])
+        # 부분 일치 (가장 짧은 이름 우선)
+        matched = listing[listing["Name"].str.contains(symbol, na=False)]
+        if not matched.empty:
+            matched = matched.copy()
+            matched["_len"] = matched["Name"].str.len()
+            return str(matched.sort_values("_len").iloc[0]["Code"])
+    except Exception:
+        pass
+    return symbol
+
+
 # ── Yahoo Finance ─────────────────────────────────────────────────────────────
 
 def _to_yahoo_symbols(symbol: str, market: str) -> list[str]:
-    """종목코드 → Yahoo Finance 심볼 후보 리스트."""
+    """종목코드(또는 한글명) → Yahoo Finance 심볼 후보 리스트."""
     if market == "KR":
-        return [f"{symbol}.KS", f"{symbol}.KQ"]
+        code = _resolve_kr_code(symbol)
+        return [f"{code}.KS", f"{code}.KQ"]
     return [symbol.upper()]
 
 
@@ -107,13 +135,14 @@ def _fetch_naver_kr(symbol: str, days: int) -> tuple[pd.DataFrame, str]:
     Naver Finance API로 1분봉 조회 후 15분봉으로 리샘플.
     한국 주식 전용 — Yahoo Finance 실패 시 폴백.
     """
+    code = _resolve_kr_code(symbol)  # 한글명 → 종목코드
     end_dt = date.today()
     start_dt = end_dt - timedelta(days=days + 2)
     count = min(days * 8 * 60, 2000)
 
     url = "https://api.finance.naver.com/siseJson.naver"
     params = {
-        "symbol": symbol,
+        "symbol": code,
         "requestType": "1",
         "startTime": start_dt.strftime("%Y%m%d"),
         "endTime": end_dt.strftime("%Y%m%d"),
