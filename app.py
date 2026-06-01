@@ -1,5 +1,5 @@
 import os
-from datetime import date, datetime
+from datetime import datetime
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
@@ -19,7 +19,7 @@ load_dotenv()
 st.set_page_config(page_title="차트 분석 매수/매도 추천기", page_icon="📈", layout="wide")
 
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "data", "cache.db")
-PERIOD_MAP = {"3개월": 95, "6개월": 190, "1년": 365}
+PERIOD_DAYS = 190  # 6개월 고정
 
 
 @st.cache_resource
@@ -79,13 +79,29 @@ div.stFormSubmitButton > button:active {
 
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
-    st.title("📈 차트 분석 매수/매도 추천기")
 
+    # ── 최상단: 타이틀 + 현재 날짜/시간 ──────────────────────────────────────
+    now = datetime.now()
+    title_col, time_col = st.columns([3, 1])
+    with title_col:
+        st.title("📈 차트 분석 매수/매도 추천기")
+    with time_col:
+        st.markdown(
+            f'<div style="text-align:right;padding-top:18px;'
+            f'font-family:system-ui,-apple-system,sans-serif;">'
+            f'<div style="font-size:20px;font-weight:600;color:#1d1d1f;letter-spacing:-0.3px;">'
+            f'{now.strftime("%H:%M:%S")}</div>'
+            f'<div style="font-size:12px;color:#888;margin-top:2px;">'
+            f'{now.strftime("%Y년 %m월 %d일")}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── 사이드바 ──────────────────────────────────────────────────────────────
     with st.sidebar:
         st.header("설정")
         with st.form("analysis_form"):
             symbol = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
-            period_label = st.selectbox("기간", list(PERIOD_MAP.keys()), index=1)
             st.divider()
             st.caption("자동 조회 실패 시 아래로 업로드")
             uploaded = st.file_uploader("엑셀/CSV 업로드", type=["xlsx", "xls", "csv"])
@@ -95,7 +111,6 @@ def main():
         st.info("좌측에서 종목을 입력하고 '분석 실행'을 누르세요.")
         return
 
-    period_days = PERIOD_MAP[period_label]
     df = None
     source = ""
 
@@ -113,7 +128,7 @@ def main():
             st.warning("종목을 입력하거나 파일을 업로드하세요.")
             return
         try:
-            df, source = fetch(symbol, period_days, get_cache())
+            df, source = fetch(symbol, PERIOD_DAYS, get_cache())
         except DataUnavailableError as e:
             st.error(str(e))
             return
@@ -129,36 +144,44 @@ def main():
 
     enriched = compute_all(df)
     signal = generate_signal(enriched)
-    analyzed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    analyzed_at = now.strftime("%Y-%m-%d %H:%M:%S")
+    chart_title = symbol.strip() or (uploaded.name if uploaded else "")
 
-    # 15분봉 단기 신호 (업로드 모드는 스킵)
-    signal_15m = None
-    df_15m = pd.DataFrame()
-    fetch_15m_tried = False
-    if uploaded is None and symbol.strip():
-        fetch_15m_tried = True
-        market = detect_market(symbol.strip())
-        with st.spinner("15분봉 데이터 조회 중…"):
-            df_15m = fetch_15min(symbol.strip(), market, days=5)
-        if not df_15m.empty:
-            enriched_15m = compute_all(df_15m)
-            signal_15m = generate_intraday_signal(enriched_15m)
-
-    title = symbol.strip() or (uploaded.name if uploaded else "")
+    # ── 섹션 1: 일봉 분석 ────────────────────────────────────────────────────
     col1, col2 = st.columns([1, 2])
     with col1:
         render_signal_card(signal, source, analyzed_at)
+        render_reasons_table(signal)
+    with col2:
+        st.plotly_chart(build_chart(enriched, chart_title), use_container_width=True)
 
-        # 15분봉 패널 (성공 시 신호 카드, 실패 시 안내)
-        if signal_15m is not None:
-            render_intraday_panel(signal_15m)
-        elif fetch_15m_tried:
+    # ── 섹션 2: 15분봉 단기 분석 ─────────────────────────────────────────────
+    if uploaded is not None or not symbol.strip():
+        return  # 업로드 모드는 15분봉 스킵
+
+    st.divider()
+    st.markdown(
+        '<div style="font-size:16px;font-weight:600;color:#1d1d1f;'
+        'letter-spacing:-0.2px;margin-bottom:12px;'
+        'font-family:system-ui,-apple-system,sans-serif;">'
+        '📊 15분봉 단기 분석</div>',
+        unsafe_allow_html=True,
+    )
+
+    market = detect_market(symbol.strip())
+    with st.spinner("15분봉 데이터 조회 중…"):
+        df_15m = fetch_15min(symbol.strip(), market, days=5)
+
+    col3, col4 = st.columns([1, 2])
+
+    if df_15m.empty:
+        with col3:
             st.markdown(
                 '<div style="border:1px dashed #e0e0e0;border-radius:14px;'
-                'padding:14px 18px;margin-bottom:12px;text-align:center;'
+                'padding:20px 18px;text-align:center;'
                 'font-family:system-ui,-apple-system,sans-serif;">'
                 '<div style="font-size:11px;font-weight:600;color:#aaa;'
-                'letter-spacing:0.6px;text-transform:uppercase;margin-bottom:4px;">'
+                'letter-spacing:0.6px;text-transform:uppercase;margin-bottom:6px;">'
                 '15분봉 단기 신호</div>'
                 '<div style="font-size:13px;color:#bbb;">'
                 '⚠️ 15분봉 데이터를 가져올 수 없습니다<br>'
@@ -166,17 +189,18 @@ def main():
                 '</div></div>',
                 unsafe_allow_html=True,
             )
-
-        render_reasons_table(signal)
-
-    with col2:
-        st.plotly_chart(build_chart(enriched, title), use_container_width=True)
-        if not df_15m.empty:
-            with st.expander("📊 15분봉 차트 보기", expanded=False):
-                st.plotly_chart(
-                    build_intraday_chart(compute_all(df_15m), title),
-                    use_container_width=True,
-                )
+        with col4:
+            st.info("15분봉 데이터를 불러오지 못해 차트를 표시할 수 없습니다.")
+    else:
+        enriched_15m = compute_all(df_15m)
+        signal_15m = generate_intraday_signal(enriched_15m)
+        with col3:
+            render_intraday_panel(signal_15m)
+        with col4:
+            st.plotly_chart(
+                build_intraday_chart(enriched_15m, chart_title),
+                use_container_width=True,
+            )
 
 
 if __name__ == "__main__":
