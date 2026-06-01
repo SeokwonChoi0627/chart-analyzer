@@ -27,12 +27,13 @@ def _gauge_html(score: float) -> str:
     p_p5 = _pct(5)
 
     gradient = (
-        f"linear-gradient(to right,"
-        f"#c62828 0%,#c62828 {p_n5:.1f}%,"
-        f"#f4511e {p_n5:.1f}%,#f4511e {p_n2:.1f}%,"
-        f"#d9d9d9 {p_n2:.1f}%,#d9d9d9 {p_p2:.1f}%,"
-        f"#4caf50 {p_p2:.1f}%,#4caf50 {p_p5:.1f}%,"
-        f"#0a8a0a {p_p5:.1f}%,#0a8a0a 100%)"
+        "linear-gradient(to right,"
+        "#c62828 0%,"
+        f"#f4511e {p_n5:.1f}%,"
+        f"#e8e8e8 {p_n2:.1f}%,"
+        f"#e8e8e8 {p_p2:.1f}%,"
+        f"#4caf50 {p_p5:.1f}%,"
+        "#0a8a0a 100%)"
     )
 
     labels = [
@@ -52,10 +53,10 @@ def _gauge_html(score: float) -> str:
 
     return (
         f'<div style="margin:20px 0 8px;padding:0 2px;">'
-        f'<div style="position:relative;height:12px;border-radius:6px;'
+        f'<div style="position:relative;height:10px;border-radius:5px;'
         f'background:{gradient};overflow:visible;">'
-        f'<div style="position:absolute;left:{pct:.1f}%;top:-7px;'
-        f'transform:translateX(-50%);width:3px;height:26px;'
+        f'<div style="position:absolute;left:{pct:.1f}%;top:-6px;'
+        f'transform:translateX(-50%);width:3px;height:22px;'
         f'background:#1d1d1f;border-radius:2px;'
         f'box-shadow:0 1px 5px rgba(0,0,0,0.28);"></div>'
         f'</div>'

@@ -10,12 +10,40 @@
   2) Yahoo Finance v10 quoteSummary + crumb 인증
   3) Yahoo Finance v8 chart meta (항상 동작 — 현재가·52주범위·시총)
 """
+import unicodedata
 from datetime import datetime
 
 import requests
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# ── 한글 종목명 정적 맵 (네트워크 없이 즉시 변환) ─────────────────────────────
+_KR_CODE_MAP: dict[str, str] = {
+    "삼성전자": "005930", "sk하이닉스": "000660",
+    "lg에너지솔루션": "373220", "삼성바이오로직스": "207940",
+    "현대차": "005380", "현대자동차": "005380",
+    "기아": "000270", "셀트리온": "068270",
+    "포스코홀딩스": "005490", "kb금융": "105560",
+    "신한지주": "055550", "삼성sdi": "006400",
+    "lg화학": "051910", "하나금융지주": "086790",
+    "현대모비스": "012330", "카카오": "035720",
+    "네이버": "035420", "naver": "035420",
+    "sk이노베이션": "096770", "삼성물산": "028260",
+    "크래프톤": "259960", "카카오뱅크": "323410",
+    "카카오페이": "377300", "두산에너빌리티": "034020",
+    "한국전력": "015760", "고려아연": "010130",
+    "아모레퍼시픽": "090430", "한화에어로스페이스": "012450",
+    "에코프로비엠": "247540", "에코프로": "086520",
+    "포스코퓨처엠": "003670", "엘앤에프": "066970",
+    "넷마블": "251270", "sk텔레콤": "017670",
+    "kt": "030200", "lg전자": "066570",
+    "삼성생명": "032830", "삼성화재": "000810",
+    "현대건설": "000720", "대한항공": "003490",
+    "하이브": "352820", "한미약품": "128940",
+    "sk케미칼": "285130", "금호석유": "011780",
+    "키움증권": "039490", "미래에셋증권": "006800",
+}
 
 _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -53,8 +81,36 @@ _YF_QUOTE_URLS = [
 # ── 공통 유틸 ─────────────────────────────────────────────────────────────────
 
 def _resolve_kr_code(symbol: str) -> str:
-    from .kr_lookup import resolve_kr_code
-    return resolve_kr_code(symbol)
+    """한글 종목명 → 6자리 코드. import 없이 독립 동작."""
+    s = symbol.strip()
+    if s.isdigit():
+        return s
+    key = unicodedata.normalize("NFC", s).strip().lower()
+    # 1순위: 정적 맵
+    if key in _KR_CODE_MAP:
+        return _KR_CODE_MAP[key]
+    for name, code in _KR_CODE_MAP.items():
+        if key in name:
+            return code
+    # 2순위: FDR (실패해도 원본 반환)
+    try:
+        import FinanceDataReader as fdr
+        import pandas as pd
+        listing = fdr.StockListing("KRX").copy()
+        listing["_k"] = listing["Name"].apply(
+            lambda x: unicodedata.normalize("NFC", str(x)).lower() if pd.notna(x) else ""
+        )
+        matched = listing[listing["_k"] == key]
+        if not matched.empty:
+            return str(matched.iloc[0]["Code"])
+        matched = listing[listing["_k"].str.contains(key, na=False, regex=False)]
+        if not matched.empty:
+            matched = matched.copy()
+            matched["_l"] = matched["_k"].str.len()
+            return str(matched.sort_values("_l").iloc[0]["Code"])
+    except Exception:
+        pass
+    return s
 
 
 def _fmt_ratio(v) -> str:
