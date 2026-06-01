@@ -1,4 +1,4 @@
-"""최근 분기 실적 조회 — Yahoo Finance quoteSummary API."""
+"""최근 분기 실적 조회 — Yahoo Finance quoteSummary API (crumb 인증 포함)."""
 from datetime import datetime
 
 import requests
@@ -15,9 +15,14 @@ _HEADERS = {
     "Accept": "application/json",
 }
 
-_YF_URLS = [
+_YF_SUMMARY_URLS = [
     "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
     "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
+]
+
+_CRUMB_URLS = [
+    "https://query1.finance.yahoo.com/v1/test/getcrumb",
+    "https://query2.finance.yahoo.com/v1/test/getcrumb",
 ]
 
 _MODULES = "incomeStatementHistoryQuarterly,defaultKeyStatistics,price"
@@ -30,6 +35,27 @@ def _resolve_yf_symbols(symbol: str, market: str) -> list[str]:
         code = _resolve_kr_code(symbol)
         return [f"{code}.KS", f"{code}.KQ"]
     return [symbol.upper()]
+
+
+def _get_session_and_crumb() -> tuple[requests.Session, str]:
+    """Yahoo Finance 세션 + 크럼 토큰 취득."""
+    session = requests.Session()
+    session.headers.update(_HEADERS)
+    try:
+        session.get("https://fc.yahoo.com/", timeout=8, verify=False)
+    except Exception:
+        pass
+
+    crumb = ""
+    for url in _CRUMB_URLS:
+        try:
+            resp = session.get(url, timeout=8, verify=False)
+            if resp.status_code == 200 and resp.text.strip():
+                crumb = resp.text.strip()
+                break
+        except Exception:
+            continue
+    return session, crumb
 
 
 def _fmt_amount(val, currency: str) -> str:
@@ -49,12 +75,14 @@ def _fmt_amount(val, currency: str) -> str:
     return f"${m:.0f}M"
 
 
-def fetch_financials(symbol: str, market: str) -> dict:
+def fetch_financials(symbol: str, market: str) -> tuple[dict, str]:
     """
     최근 4분기 실적 + PER / PBR 반환.
-    실패 시 빈 dict 반환.
+    Returns: (result_dict, error_msg)
+      성공 시 error_msg = ""
+      실패 시 result_dict = {}
 
-    반환 형식:
+    result_dict 형식:
     {
         "quarters": [
             {"기간": "2025.09", "매출": "79.1조", "영업이익": "9.2조", "순이익": "7.3조"},
@@ -66,21 +94,29 @@ def fetch_financials(symbol: str, market: str) -> dict:
         "yf_symbol": "005930.KS",
     }
     """
+    session, crumb = _get_session_and_crumb()
+    errors: list[str] = []
+
     for yf_sym in _resolve_yf_symbols(symbol, market):
-        for url_tpl in _YF_URLS:
+        for url_tpl in _YF_SUMMARY_URLS:
             url = url_tpl.format(sym=yf_sym)
+            params = {"modules": _MODULES}
+            if crumb:
+                params["crumb"] = crumb
             try:
-                resp = requests.get(
-                    url,
-                    params={"modules": _MODULES},
-                    headers=_HEADERS,
-                    timeout=12,
-                    verify=False,
-                )
+                resp = session.get(url, params=params, timeout=12, verify=False)
                 resp.raise_for_status()
                 data = resp.json()
                 result = (data.get("quoteSummary") or {}).get("result") or []
+
+                # quoteSummary 레벨 오류 확인
+                qs_error = (data.get("quoteSummary") or {}).get("error")
+                if qs_error:
+                    errors.append(f"{yf_sym}: {qs_error}")
+                    continue
+
                 if not result:
+                    errors.append(f"{yf_sym}: result 없음")
                     continue
 
                 r = result[0]
@@ -103,25 +139,26 @@ def fetch_financials(symbol: str, market: str) -> dict:
                     except Exception:
                         period = "?"
 
-                    def _get(key: str):
-                        v = item.get(key)
+                    def _get(key: str, _item=item):
+                        v = _item.get(key)
                         return v.get("raw") if isinstance(v, dict) else None
 
                     quarters.append({
-                        "기간":   period,
-                        "매출":   _fmt_amount(_get("totalRevenue"),    currency),
+                        "기간":    period,
+                        "매출":    _fmt_amount(_get("totalRevenue"),    currency),
                         "영업이익": _fmt_amount(_get("operatingIncome"), currency),
-                        "순이익":  _fmt_amount(_get("netIncome"),        currency),
+                        "순이익":   _fmt_amount(_get("netIncome"),       currency),
                     })
 
                 if not quarters:
+                    errors.append(f"{yf_sym}: 분기 실적 데이터 없음")
                     continue
 
                 # PER / PBR
                 ks = r.get("defaultKeyStatistics") or {}
 
-                def _ks(key: str):
-                    v = ks.get(key)
+                def _ks(key: str, _ks=ks):
+                    v = _ks.get(key)
                     return v.get("raw") if isinstance(v, dict) else v
 
                 per_raw = _ks("trailingPE")
@@ -135,9 +172,10 @@ def fetch_financials(symbol: str, market: str) -> dict:
                     "pbr":       pbr,
                     "currency":  currency,
                     "yf_symbol": yf_sym,
-                }
+                    "crumb_ok":  bool(crumb),
+                }, ""
 
-            except Exception:
-                continue
+            except Exception as e:
+                errors.append(f"{yf_sym} ({url_tpl.split('/')[2]}): {type(e).__name__}: {e}")
 
-    return {}
+    return {}, " | ".join(errors)

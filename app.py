@@ -29,8 +29,8 @@ def get_cache() -> OhlcvCache:
 
 
 @st.cache_data(ttl=3600)
-def get_financials(symbol: str, market: str) -> dict:
-    """실적 데이터 1시간 캐시."""
+def get_financials(symbol: str, market: str) -> tuple[dict, str]:
+    """실적 데이터 1시간 캐시. (dict, error_msg) 반환."""
     return fetch_financials(symbol, market)
 
 
@@ -94,10 +94,13 @@ def _render_financials(symbol: str, market: str) -> None:
     )
 
     with st.spinner("실적 조회 중…"):
-        fin = get_financials(symbol, market)
+        fin, err = get_financials(symbol, market)
 
     if not fin:
         st.caption("실적 데이터를 불러올 수 없습니다.")
+        if err:
+            with st.expander("🔍 오류 상세", expanded=False):
+                st.code(err, language=None)
         return
 
     quarters = fin.get("quarters", [])
@@ -112,8 +115,9 @@ def _render_financials(symbol: str, market: str) -> None:
         c2.metric("PBR", pbr)
 
     yf_sym = fin.get("yf_symbol", "")
+    crumb_ok = fin.get("crumb_ok", False)
     if yf_sym:
-        st.caption(f"출처: Yahoo Finance ({yf_sym})")
+        st.caption(f"Yahoo Finance ({yf_sym})"  + (" · 인증 OK" if crumb_ok else ""))
 
 
 def main():
