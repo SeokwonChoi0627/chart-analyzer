@@ -48,15 +48,21 @@ html, body, [class*="css"] {
     color: #1d1d1f;
 }
 
-/* ── 종목 헤더 고정 ── */
+/* ── 종목 헤더 fixed 고정 ── */
 .sticky-header {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 280px;
+    right: 0;
     z-index: 999;
     background: #ffffff;
-    padding: 10px 0 8px;
-    margin-bottom: 8px;
+    padding: 10px 2rem 8px;
     border-bottom: 1px solid #e5e5ea;
+}
+
+/* ── 고정 헤더 높이만큼 본문 여백 ── */
+div[data-testid="stMainBlockContainer"] {
+    padding-top: 72px !important;
 }
 
 /* ── 사이드바: Apple parchment 배경 ── */
