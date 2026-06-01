@@ -249,22 +249,83 @@ def _fetch_yahoo(yf_sym: str, session: requests.Session, crumb: str) -> tuple[di
     return {}, f"Yahoo({yf_sym}): 분기 실적 없음"
 
 
+def _fetch_yahoo_v7(symbol: str) -> tuple[dict, str]:
+    """
+    Yahoo Finance v7 quote API — crumb 불필요, 기본 재무지표 반환.
+    PER·PBR·EPS·배당률·시총 제공 (분기 실적 없음).
+    """
+    params = {
+        "symbols": symbol,
+        "fields": (
+            "trailingPE,priceToBook,epsTrailingTwelveMonths,"
+            "dividendYield,marketCap,currency,shortName"
+        ),
+    }
+    for base in ["https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"]:
+        url = f"{base}/v7/finance/quote"
+        try:
+            resp = requests.get(url, params=params, headers=_HEADERS_YF,
+                                timeout=10, verify=False)
+            resp.raise_for_status()
+            data = resp.json()
+            result = (data.get("quoteResponse") or {}).get("result") or []
+            if not result:
+                continue
+            r = result[0]
+            currency = r.get("currency") or "USD"
+            per_v = r.get("trailingPE")
+            pbr_v = r.get("priceToBook")
+            if not per_v and not pbr_v:
+                continue
+
+            extras: list[dict] = []
+            eps = r.get("epsTrailingTwelveMonths")
+            div = r.get("dividendYield")   # 소수 (e.g. 0.0057 = 0.57%)
+            cap = r.get("marketCap")
+            if eps is not None:
+                extras.append({"항목": "EPS", "값": f"${eps:.2f}"})
+            if div is not None:
+                extras.append({"항목": "배당률", "값": f"{div * 100:.2f}%"})
+            if cap is not None:
+                extras.append({"항목": "시총", "값": _fmt_amount(cap, currency)})
+
+            return {
+                "quarters":  [],
+                "per":       f"{per_v:.1f}배" if per_v else "—",
+                "pbr":       f"{pbr_v:.2f}배" if pbr_v else "—",
+                "extras":    extras,
+                "currency":  currency,
+                "source":    "Yahoo Finance",
+                "yf_symbol": symbol,
+            }, ""
+        except Exception as e:
+            continue
+    return {}, f"YF v7({symbol}): {type(Exception()).__name__}"
+
+
 # ── 공개 인터페이스 ───────────────────────────────────────────────────────────
 
 def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
     """
     재무지표 조회. Returns: (result_dict, [error_messages])
-    오류 메시지는 각 시도별로 분리된 리스트로 반환.
     """
     all_errors: list[str] = []
 
+    # ── 한국 주식 ──────────────────────────────────────────────────────────────
     if market == "KR":
         code = _resolve_kr_code(symbol)
 
         # 1차: Naver 모바일 API
         fin, err = _fetch_naver_mobile(code)
+        if not fin:
+            all_errors.append(f"[Naver 모바일] {err}")
+            # 2차: Naver itemSummary
+            fin, err = _fetch_naver_summary(code)
+            if not fin:
+                all_errors.append(f"[Naver 요약] {err}")
+
         if fin:
-            # 병행: Yahoo Finance로 분기 실적 추가
+            # 병행: Yahoo Finance v10으로 분기 실적 추가 시도
             try:
                 session, crumb = _get_yf_session()
                 for suffix in [".KS", ".KQ"]:
@@ -276,22 +337,42 @@ def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
             except Exception:
                 pass
             return fin, []
-        all_errors.append(f"[Naver 모바일] {err}")
 
-        # 2차: Naver itemSummary
-        fin, err = _fetch_naver_summary(code)
-        if fin:
-            return fin, []
-        all_errors.append(f"[Naver 요약] {err}")
+        # 3차: Yahoo Finance v10
+        session, crumb = _get_yf_session()
+        for suffix in [".KS", ".KQ"]:
+            fin, err = _fetch_yahoo(f"{code}{suffix}", session, crumb)
+            if fin:
+                return fin, []
+            all_errors.append(f"[Yahoo {code}{suffix}] {err}")
 
-    # US or KR 전부 실패 → Yahoo Finance
+        return {}, all_errors
+
+    # ── 미국 주식 ──────────────────────────────────────────────────────────────
+    sym = symbol.upper()
+
+    # 1차: Yahoo Finance v7 (crumb 불필요 — 기본 지표)
+    fin, err = _fetch_yahoo_v7(sym)
+    if not fin:
+        all_errors.append(f"[Yahoo v7] {err}")
+
+    if fin:
+        # 병행: v10으로 분기 실적 추가 시도
+        try:
+            session, crumb = _get_yf_session()
+            yf_fin, _ = _fetch_yahoo(sym, session, crumb)
+            if yf_fin.get("quarters"):
+                fin["quarters"] = yf_fin["quarters"]
+                fin["source"] += " + 분기실적"
+        except Exception:
+            pass
+        return fin, []
+
+    # 2차: Yahoo Finance v10 (crumb 필요)
     session, crumb = _get_yf_session()
-    yf_syms = ([f"{_resolve_kr_code(symbol)}.KS", f"{_resolve_kr_code(symbol)}.KQ"]
-               if market == "KR" else [symbol.upper()])
-    for yf_sym in yf_syms:
-        fin, err = _fetch_yahoo(yf_sym, session, crumb)
-        if fin:
-            return fin, []
-        all_errors.append(f"[Yahoo {yf_sym}] {err}")
+    fin, err = _fetch_yahoo(sym, session, crumb)
+    if fin:
+        return fin, []
+    all_errors.append(f"[Yahoo v10] {err}")
 
     return {}, all_errors
