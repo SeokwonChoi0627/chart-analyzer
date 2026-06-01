@@ -217,7 +217,9 @@ def _render_financials(fin: dict, errors: list) -> None:
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
 
-    now = datetime.now()
+    from datetime import timezone, timedelta
+    KST = timezone(timedelta(hours=9))
+    now = datetime.now(KST)
 
     # ── 사이드바: 입력 폼 ─────────────────────────────────────────────────────
     with st.sidebar:
@@ -260,7 +262,7 @@ def main():
     enriched   = compute_all(df)
     signal     = generate_signal(enriched)
     analyzed_at = now.strftime("%Y-%m-%d %H:%M:%S")
-    chart_title = symbol.strip()
+    chart_title = f"{symbol.strip().upper()} - 일봉"
 
     # ── 재무 데이터 (한 번만 조회) ───────────────────────────────────────────
     with st.spinner("재무 데이터 조회 중…"):
@@ -271,22 +273,32 @@ def main():
     with st.sidebar:
         _render_financials(fin_data, fin_errors)
     ticker_upper = symbol.strip().upper()
+    kst_time = now.strftime("%H:%M")
+    kst_date = now.strftime("%Y.%m.%d")
+
     if company_name and company_name.upper() != ticker_upper:
-        header_html = (
-            f'<div style="margin-bottom:16px;font-family:system-ui,-apple-system,sans-serif;">'
-            f'<div style="font-size:26px;font-weight:700;color:#1d1d1f;letter-spacing:-0.5px;line-height:1.15;">'
-            f'{company_name}</div>'
-            f'<div style="font-size:14px;font-weight:500;color:#888;margin-top:2px;letter-spacing:0.2px;">'
-            f'{ticker_upper}</div>'
-            f'</div>'
+        name_block = (
+            f'<div style="font-size:26px;font-weight:700;color:#1d1d1f;'
+            f'letter-spacing:-0.5px;line-height:1.15;">{company_name}</div>'
+            f'<div style="font-size:14px;font-weight:500;color:#888;'
+            f'margin-top:2px;letter-spacing:0.2px;">{ticker_upper}</div>'
         )
     else:
-        header_html = (
-            f'<div style="margin-bottom:16px;font-family:system-ui,-apple-system,sans-serif;">'
-            f'<div style="font-size:26px;font-weight:700;color:#1d1d1f;letter-spacing:-0.5px;">'
-            f'{ticker_upper}</div>'
-            f'</div>'
+        name_block = (
+            f'<div style="font-size:26px;font-weight:700;color:#1d1d1f;'
+            f'letter-spacing:-0.5px;">{ticker_upper}</div>'
         )
+
+    header_html = (
+        f'<div style="display:flex;justify-content:space-between;align-items:flex-start;'
+        f'margin-bottom:16px;font-family:system-ui,-apple-system,sans-serif;">'
+        f'<div>{name_block}</div>'
+        f'<div style="text-align:right;">'
+        f'<div style="font-size:22px;font-weight:600;color:#1d1d1f;letter-spacing:-0.3px;">{kst_time}</div>'
+        f'<div style="font-size:11px;color:#aaa;margin-top:2px;">KST &nbsp;{kst_date}</div>'
+        f'</div>'
+        f'</div>'
+    )
     st.markdown(header_html, unsafe_allow_html=True)
 
     # ── 섹션 1: 일봉 분석 ────────────────────────────────────────────────────
