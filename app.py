@@ -68,16 +68,30 @@ div[data-testid="stAlert"] {
     border-radius: 12px !important;
 }
 
-/* ── Streamlit 상단 툴바 + 사이드바 접기 버튼 숨김 ── */
+/* ── Streamlit 상단 툴바 숨김 ── */
 div[data-testid="stToolbar"],
 div[data-testid="stDecoration"],
 #MainMenu,
-header[data-testid="stHeader"],
-button[data-testid="collapsedControl"],
-div[data-testid="stSidebarCollapseButton"],
-section[data-testid="stSidebar"] button[kind="header"] {
+header[data-testid="stHeader"] {
     display: none !important;
     visibility: hidden !important;
+}
+
+/* ── 사이드바 항상 표시 고정 ── */
+section[data-testid="stSidebar"] {
+    transform: none !important;
+    min-width: 280px !important;
+    width: 280px !important;
+}
+
+/* ── 사이드바 내부 접기 버튼 숨김 ── */
+div[data-testid="stSidebarCollapseButton"] {
+    display: none !important;
+}
+
+/* ── 메인 영역의 사이드바 열기 버튼 숨김 ── */
+button[data-testid="collapsedControl"] {
+    display: none !important;
 }
 
 /* ── 폼 제출 버튼 (Enter 키 포함) ── */
