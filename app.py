@@ -123,6 +123,23 @@ def _section_title(text: str) -> None:
     )
 
 
+def _per_pbr_row(per: str, pbr: str) -> None:
+    """PER / PBR을 잘림 없이 나란히 표시."""
+    st.markdown(
+        f'<div style="display:flex;gap:16px;margin:6px 0 10px;">'
+        f'<div style="flex:1;">'
+        f'<div style="font-size:11px;color:#aaa;font-weight:600;letter-spacing:0.4px;">PER</div>'
+        f'<div style="font-size:20px;font-weight:700;color:#1d1d1f;letter-spacing:-0.3px;white-space:nowrap;">{per}</div>'
+        f'</div>'
+        f'<div style="flex:1;">'
+        f'<div style="font-size:11px;color:#aaa;font-weight:600;letter-spacing:0.4px;">PBR</div>'
+        f'<div style="font-size:20px;font-weight:700;color:#1d1d1f;letter-spacing:-0.3px;white-space:nowrap;">{pbr}</div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _kv_table(data: dict) -> None:
     """key-value dict를 2열 간결 테이블로 표시."""
     if not data:
@@ -156,31 +173,22 @@ def _render_financials(fin: dict, errors: list) -> None:
 
     if valuation:
         _section_title("밸류에이션")
-        # PER / PBR 상단 메트릭
         per = valuation.get("PER(후행)") or fin.get("per", "—")
         pbr = valuation.get("PBR")       or fin.get("pbr", "—")
-        c1, c2 = st.columns(2)
-        c1.metric("PER", per)
-        c2.metric("PBR", pbr)
-        # 나머지 항목
+        _per_pbr_row(per, pbr)
         rest = {k: v for k, v in valuation.items()
                 if k not in ("PER(후행)", "PBR") and v}
         _kv_table(rest)
     elif extras:
-        # Naver 소스 — 기존 extras 형식
         per, pbr = fin.get("per", "—"), fin.get("pbr", "—")
         if per != "—" or pbr != "—":
-            c1, c2 = st.columns(2)
-            c1.metric("PER", per)
-            c2.metric("PBR", pbr)
+            _per_pbr_row(per, pbr)
         df_ext = pd.DataFrame(extras).set_index("항목")
         st.dataframe(df_ext, use_container_width=True)
     else:
         per, pbr = fin.get("per", "—"), fin.get("pbr", "—")
         if per != "—" or pbr != "—":
-            c1, c2 = st.columns(2)
-            c1.metric("PER", per)
-            c2.metric("PBR", pbr)
+            _per_pbr_row(per, pbr)
 
     # ── 수익성 ──────────────────────────────────────────────────────────────────
     profitability = fin.get("profitability") or {}
