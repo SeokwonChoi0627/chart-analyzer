@@ -46,10 +46,11 @@ def _to_yahoo_symbols(symbol: str, market: str) -> list[str]:
     return [symbol.upper()]
 
 
-def _fetch_yahoo(yf_symbol: str, days: int) -> pd.DataFrame:
-    """Yahoo Finance v8 chart API로 15분봉 조회. verify=False로 SSL MITM 우회."""
+def _fetch_yahoo(yf_symbol: str, days: int) -> tuple[pd.DataFrame, str]:
+    """Yahoo Finance v8 chart API로 15분봉 조회. (df, error_msg) 반환."""
     range_ = f"{min(days, 7)}d"
     params = {"interval": "15m", "range": range_}
+    last_err = ""
 
     for url_tpl in _YF_BASE_URLS:
         url = url_tpl.format(sym=yf_symbol)
@@ -62,11 +63,13 @@ def _fetch_yahoo(yf_symbol: str, days: int) -> pd.DataFrame:
             data = resp.json()
             result = (data.get("chart") or {}).get("result") or []
             if not result:
+                last_err = f"Yahoo({yf_symbol}): 데이터 없음 (result empty)"
                 continue
 
             chart = result[0]
             timestamps = chart.get("timestamp") or []
             if not timestamps:
+                last_err = f"Yahoo({yf_symbol}): timestamp 없음"
                 continue
 
             quote = chart["indicators"]["quote"][0]
@@ -88,23 +91,25 @@ def _fetch_yahoo(yf_symbol: str, days: int) -> pd.DataFrame:
             )
             df = df.dropna().sort_index()
             if not df.empty:
-                return df
-        except Exception:
-            continue
+                return df, ""
+            last_err = f"Yahoo({yf_symbol}): dropna 후 빈 데이터"
 
-    return pd.DataFrame(columns=OHLCV_COLUMNS)
+        except Exception as e:
+            last_err = f"Yahoo({yf_symbol}): {type(e).__name__}: {e}"
+
+    return pd.DataFrame(columns=OHLCV_COLUMNS), last_err
 
 
 # ── Naver Finance (한국 주식 폴백) ────────────────────────────────────────────
 
-def _fetch_naver_kr(symbol: str, days: int) -> pd.DataFrame:
+def _fetch_naver_kr(symbol: str, days: int) -> tuple[pd.DataFrame, str]:
     """
     Naver Finance API로 1분봉 조회 후 15분봉으로 리샘플.
-    한국 주식 전용 — Yahoo Finance 실패 시 폴백으로 사용.
+    한국 주식 전용 — Yahoo Finance 실패 시 폴백.
     """
     end_dt = date.today()
     start_dt = end_dt - timedelta(days=days + 2)
-    count = min(days * 8 * 60, 2000)  # 하루 약 400봉 기준, 최대 2000
+    count = min(days * 8 * 60, 2000)
 
     url = "https://api.finance.naver.com/siseJson.naver"
     params = {
@@ -124,15 +129,13 @@ def _fetch_naver_kr(symbol: str, days: int) -> pd.DataFrame:
         text = resp.text.strip()
         rows = json.loads(text)
         if not rows or not isinstance(rows, list):
-            return pd.DataFrame(columns=OHLCV_COLUMNS)
+            return pd.DataFrame(columns=OHLCV_COLUMNS), "Naver: 빈 응답"
 
-        # 응답 형식: [[날짜시간, 시가, 고가, 저가, 종가, 거래량], ...]
         df = pd.DataFrame(rows, columns=["dt", "open", "high", "low", "close", "volume"])
         df["dt"] = pd.to_datetime(df["dt"].astype(str), format="%Y%m%d%H%M%S", errors="coerce")
         df = df.dropna(subset=["dt"]).set_index("dt").sort_index()
         df = df.apply(pd.to_numeric, errors="coerce").dropna()
 
-        # 1분봉 → 15분봉 리샘플
         df_15m = df.resample("15min", label="left").agg({
             "open":   "first",
             "high":   "max",
@@ -140,38 +143,45 @@ def _fetch_naver_kr(symbol: str, days: int) -> pd.DataFrame:
             "close":  "last",
             "volume": "sum",
         }).dropna(subset=["open", "close"])
+        df_15m = df_15m[df_15m["volume"] > 0]
 
-        return df_15m[df_15m["volume"] > 0]
+        if df_15m.empty:
+            return pd.DataFrame(columns=OHLCV_COLUMNS), "Naver: 리샘플 후 빈 데이터"
+        return df_15m, ""
 
-    except Exception:
-        return pd.DataFrame(columns=OHLCV_COLUMNS)
+    except Exception as e:
+        return pd.DataFrame(columns=OHLCV_COLUMNS), f"Naver: {type(e).__name__}: {e}"
 
 
 # ── 공개 인터페이스 ───────────────────────────────────────────────────────────
 
-def fetch_15min(symbol: str, market: str, days: int = 5) -> pd.DataFrame:
+def fetch_15min(
+    symbol: str, market: str, days: int = 5
+) -> tuple[pd.DataFrame, str]:
     """
-    15분봉 OHLCV 조회. 실패 시 빈 DataFrame 반환 (앱은 계속 동작).
+    15분봉 OHLCV 조회. (DataFrame, 오류메시지) 반환.
+    성공 시 오류메시지는 빈 문자열.
 
     조회 순서:
       KR: Yahoo Finance (.KS → .KQ) → Naver Finance
       US: Yahoo Finance
-
-    Args:
-        symbol: 6자리 코드(KR) 또는 티커(US)
-        market: 'KR' | 'US'
-        days:   조회 기간 (Yahoo 최대 7일)
     """
+    errors: list[str] = []
+
     # 1차: Yahoo Finance
     for yf_sym in _to_yahoo_symbols(symbol, market):
-        df = _fetch_yahoo(yf_sym, days)
+        df, err = _fetch_yahoo(yf_sym, days)
         if not df.empty:
-            return df
+            return df, ""
+        if err:
+            errors.append(err)
 
     # 2차: Naver Finance (KR 전용 폴백)
     if market == "KR":
-        df = _fetch_naver_kr(symbol, days)
+        df, err = _fetch_naver_kr(symbol, days)
         if not df.empty:
-            return df
+            return df, ""
+        if err:
+            errors.append(err)
 
-    return pd.DataFrame(columns=OHLCV_COLUMNS)
+    return pd.DataFrame(columns=OHLCV_COLUMNS), " | ".join(errors)

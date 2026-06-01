@@ -170,7 +170,7 @@ def main():
 
     market = detect_market(symbol.strip())
     with st.spinner("15분봉 데이터 조회 중…"):
-        df_15m = fetch_15min(symbol.strip(), market, days=5)
+        df_15m, err_15m = fetch_15min(symbol.strip(), market, days=5)
 
     col3, col4 = st.columns([1, 2])
 
@@ -184,13 +184,15 @@ def main():
                 'letter-spacing:0.6px;text-transform:uppercase;margin-bottom:6px;">'
                 '15분봉 단기 신호</div>'
                 '<div style="font-size:13px;color:#bbb;">'
-                '⚠️ 15분봉 데이터를 가져올 수 없습니다<br>'
-                '<span style="font-size:11px;">네트워크 또는 SSL 환경 문제일 수 있습니다</span>'
+                '⚠️ 15분봉 데이터를 가져올 수 없습니다'
                 '</div></div>',
                 unsafe_allow_html=True,
             )
         with col4:
-            st.info("15분봉 데이터를 불러오지 못해 차트를 표시할 수 없습니다.")
+            st.warning("15분봉 데이터를 불러오지 못했습니다.")
+            if err_15m:
+                with st.expander("🔍 오류 상세 (진단용)", expanded=True):
+                    st.code(err_15m, language=None)
     else:
         enriched_15m = compute_all(df_15m)
         signal_15m = generate_intraday_signal(enriched_15m)
