@@ -63,6 +63,15 @@ div[data-testid="stAlert"] {
     border-radius: 12px !important;
 }
 
+/* ── Streamlit 상단 툴바 숨김 ── */
+div[data-testid="stToolbar"],
+div[data-testid="stDecoration"],
+#MainMenu,
+header[data-testid="stHeader"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+
 /* ── 폼 제출 버튼 (Enter 키 포함) ── */
 div.stFormSubmitButton > button {
     border-radius: 9999px !important;

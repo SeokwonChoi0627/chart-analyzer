@@ -53,18 +53,15 @@ _YF_QUOTE_URLS = [
 # ── 공통 유틸 ─────────────────────────────────────────────────────────────────
 
 def _resolve_kr_code(symbol: str) -> str:
+    """한글 종목명 → 6자리 코드. pykrx_kr의 3단계 폴백 로직 재사용."""
     if symbol.isdigit():
         return symbol
+    # pykrx_kr의 3단계 폴백 사용 (정적맵 → Naver → FDR)
     try:
-        import FinanceDataReader as fdr
-        listing = fdr.StockListing("KRX")
-        m = listing[listing["Name"] == symbol]
-        if not m.empty:
-            return str(m.iloc[0]["Code"])
-        m = listing[listing["Name"].str.contains(symbol, na=False)]
-        if not m.empty:
-            m = m.copy(); m["_l"] = m["Name"].str.len()
-            return str(m.sort_values("_l").iloc[0]["Code"])
+        from .pykrx_kr import PykrxProvider
+        code = PykrxProvider._name_to_ticker(symbol)
+        if code:
+            return code
     except Exception:
         pass
     return symbol
