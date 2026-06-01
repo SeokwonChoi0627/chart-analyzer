@@ -325,7 +325,7 @@ def _fetch_yahoo_v10(yf_sym: str, session: requests.Session,
             if cr_r:     market["유동비율"]  = f"{cr_r:.2f}"
             if de_r:     market["부채비율"]  = f"{de_r:.1f}%"
 
-            if not quarters and not valuation:
+            if not quarters and not valuation and not market:
                 errors.append(f"v10 {url}: 유효 데이터 없음")
                 continue
 
@@ -502,22 +502,17 @@ def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
     sym = symbol.upper()
     session, crumb = _get_yf_session()
 
-    # 1차: v7 + crumb (crumb 있으면 401 해결 가능)
-    fin, err = _fetch_yahoo_v7(sym, session, crumb)
-    if fin:
-        # v10으로 분기 실적 추가 시도
-        yf_fin, _ = _fetch_yahoo_v10(sym, session, crumb)
-        if yf_fin.get("quarters"):
-            fin["quarters"] = yf_fin["quarters"]
-            fin["source"] += " + 분기실적"
-        return fin, []
-    all_errors.append(f"[Yahoo v7] {err}")
-
-    # 2차: v10 quoteSummary + crumb
+    # 1차: v10 quoteSummary (시총·PER·PBR·분기실적 모두 포함)
     fin, err = _fetch_yahoo_v10(sym, session, crumb)
     if fin:
         return fin, []
     all_errors.append(f"[Yahoo v10] {err}")
+
+    # 2차: v7 + crumb (v10 실패 시)
+    fin, err = _fetch_yahoo_v7(sym, session, crumb)
+    if fin:
+        return fin, []
+    all_errors.append(f"[Yahoo v7] {err}")
 
     # 3차: v8 chart meta (항상 동작 — 현재가·52주범위·시총)
     fin, err = _fetch_yahoo_v8_meta(sym, session)

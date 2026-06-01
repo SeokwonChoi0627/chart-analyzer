@@ -79,6 +79,7 @@ div.stFormSubmitButton > button:hover {
 div.stFormSubmitButton > button:active {
     transform: scale(0.96);
 }
+
 </style>
 """
 
@@ -180,29 +181,20 @@ def _render_financials(symbol: str, market: str) -> None:
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
 
-    # ── 최상단: 타이틀 + 현재 날짜/시간 ──────────────────────────────────────
     now = datetime.now()
-    title_col, time_col = st.columns([3, 1])
-    with title_col:
-        st.title("차트 분석기")
-    with time_col:
-        st.markdown(
-            f'<div style="text-align:right;padding-top:18px;'
-            f'font-family:system-ui,-apple-system,sans-serif;">'
-            f'<div style="font-size:20px;font-weight:600;color:#1d1d1f;letter-spacing:-0.3px;">'
-            f'{now.strftime("%H:%M:%S")}</div>'
-            f'<div style="font-size:12px;color:#888;margin-top:2px;">'
-            f'{now.strftime("%Y년 %m월 %d일")}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
 
     # ── 사이드바: 입력 폼 ─────────────────────────────────────────────────────
     with st.sidebar:
-        st.header("설정")
+        st.title("차트 분석기")
+        st.markdown('<div style="margin-bottom:28px;"></div>', unsafe_allow_html=True)
         with st.form("analysis_form"):
             symbol = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
             run = st.form_submit_button("분석 실행", use_container_width=True)
+        st.markdown(
+            '<div style="font-size:14px;color:#aaa;text-align:left;margin-top:2px;">'
+            'made by penguin</div>',
+            unsafe_allow_html=True,
+        )
 
     if not run:
         st.info("좌측에서 종목을 입력하고 '분석 실행'을 누르세요.")
