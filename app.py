@@ -48,6 +48,17 @@ html, body, [class*="css"] {
     color: #1d1d1f;
 }
 
+/* ── 종목 헤더 고정 ── */
+.sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    background: #ffffff;
+    padding: 10px 0 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #e5e5ea;
+}
+
 /* ── 사이드바: Apple parchment 배경 ── */
 section[data-testid="stSidebar"] {
     background-color: #f5f5f7 !important;
@@ -290,8 +301,8 @@ def main():
         )
 
     header_html = (
-        f'<div style="display:flex;justify-content:space-between;align-items:flex-start;'
-        f'margin-bottom:16px;font-family:system-ui,-apple-system,sans-serif;">'
+        f'<div class="sticky-header" style="display:flex;justify-content:space-between;'
+        f'align-items:flex-start;font-family:system-ui,-apple-system,sans-serif;">'
         f'<div>{name_block}</div>'
         f'<div style="text-align:right;">'
         f'<div style="font-size:22px;font-weight:600;color:#1d1d1f;letter-spacing:-0.3px;">{kst_time}</div>'
