@@ -115,7 +115,7 @@ def _resolve_kr_code(symbol: str) -> str:
 
 def _fmt_ratio(v) -> str:
     try:
-        return f"{float(str(v).replace(',', '')):.2f}배" if v else "—"
+        return f"{float(str(v).replace(',', '')):.1f}배" if v else "—"
     except Exception:
         return str(v) if v else "—"
 
@@ -308,7 +308,7 @@ def _fetch_yahoo_v10(yf_sym: str, session: requests.Session,
             def _sd(k): return _raw(sd, k)
 
             def _pct(v):   return f"{v * 100:.1f}%" if v is not None else None
-            def _x(v):     return f"{v:.2f}배" if v is not None else None
+            def _x(v):     return f"{v:.1f}배" if v is not None else None
             def _price(v): return f"${v:,.2f}" if v is not None else None
 
             # 밸류에이션
@@ -383,7 +383,7 @@ def _fetch_yahoo_v10(yf_sym: str, session: requests.Session,
                 "profitability": profitability,
                 "market":        market,
                 "per":           f"{per_r:.1f}배" if per_r else "—",
-                "pbr":           f"{pbr_r:.2f}배" if pbr_r else "—",
+                "pbr":           f"{pbr_r:.1f}배" if pbr_r else "—",
                 "extras":        [],
                 "currency":      currency,
                 "source":        "Yahoo Finance",
@@ -509,7 +509,7 @@ def _fetch_yahoo_html(sym: str, session: requests.Session) -> tuple[dict, str]:
     if not per_r and not cap_r and not pbr_r:
         return {}, f"HTML {sym}: 재무지표 없음 (page len={len(text)})"
 
-    def _x(v):     return f"{v:.2f}배" if v is not None else None
+    def _x(v):     return f"{v:.1f}배" if v is not None else None
     def _pct(v):   return f"{v * 100:.2f}%" if v is not None else None
     def _price(v): return f"${v:,.2f}" if v is not None else None
 
