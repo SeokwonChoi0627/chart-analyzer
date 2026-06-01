@@ -34,6 +34,12 @@ def fetch(symbol: str, period_days: int, cache: OhlcvCache) -> tuple[pd.DataFram
         cache.save(symbol, df)
         return df, source
 
+    if market == "KR":
+        raise DataUnavailableError(
+            f"'{symbol}' 데이터를 가져오지 못했습니다.\n"
+            f"종목코드(예: 005930) 또는 정확한 종목명(예: 삼성전자)으로 입력해 보세요."
+        )
     raise DataUnavailableError(
-        f"'{symbol}' 데이터를 자동으로 가져오지 못했습니다. 엑셀/CSV를 업로드해 주세요."
+        f"'{symbol}' 데이터를 가져오지 못했습니다.\n"
+        f"티커 심볼(예: AAPL, TSLA)로 정확히 입력해 보세요."
     )
