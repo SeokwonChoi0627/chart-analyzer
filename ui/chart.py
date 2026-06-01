@@ -52,7 +52,16 @@ def build_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
 
 
 def build_intraday_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
-    """15분봉 캔들 + 거래량 + RSI 3단 차트."""
+    """15분봉 캔들 + 거래량 + RSI 3단 차트 (세션 갭 제거)."""
+    # 날짜가 바뀌는 구간은 날짜+시간, 같은 날은 시간만 표시
+    dates = df.index.date
+    x_labels: list[str] = []
+    for i, dt in enumerate(df.index):
+        if i == 0 or dates[i] != dates[i - 1]:
+            x_labels.append(dt.strftime("%m/%d %H:%M"))
+        else:
+            x_labels.append(dt.strftime("%H:%M"))
+
     fig = make_subplots(
         rows=3, cols=1, shared_xaxes=True,
         row_heights=[0.55, 0.2, 0.25],
@@ -62,7 +71,7 @@ def build_intraday_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
 
     # 1단: 캔들
     fig.add_trace(go.Candlestick(
-        x=df.index, open=df["open"], high=df["high"],
+        x=x_labels, open=df["open"], high=df["high"],
         low=df["low"], close=df["close"], name="15분봉",
     ), row=1, col=1)
 
@@ -70,7 +79,7 @@ def build_intraday_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
     for col_, color in [("sma5", "#ff9800"), ("sma20", "#2196f3")]:
         if col_ in df.columns:
             fig.add_trace(go.Scatter(
-                x=df.index, y=df[col_], name=col_.upper(),
+                x=x_labels, y=df[col_], name=col_.upper(),
                 line=dict(width=1, color=color),
             ), row=1, col=1)
 
@@ -80,14 +89,14 @@ def build_intraday_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
         for c, o in zip(df["close"], df["open"])
     ]
     fig.add_trace(go.Bar(
-        x=df.index, y=df["volume"], name="거래량",
+        x=x_labels, y=df["volume"], name="거래량",
         marker_color=bar_colors, showlegend=False,
     ), row=2, col=1)
 
     # 3단: RSI
     if "rsi" in df.columns:
         fig.add_trace(go.Scatter(
-            x=df.index, y=df["rsi"], name="RSI",
+            x=x_labels, y=df["rsi"], name="RSI",
             line=dict(color="#e91e63", width=1.5), showlegend=False,
         ), row=3, col=1)
         fig.add_hline(y=70, line_dash="dash", line_color="red",   row=3, col=1)
@@ -100,4 +109,6 @@ def build_intraday_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
         xaxis_rangeslider_visible=False,
         margin=dict(t=50, b=20),
     )
+    # 카테고리 축 → 야간/주말 빈 구간 완전 제거, 실제 캔들만 연속 표시
+    fig.update_xaxes(type="category", tickangle=-45, nticks=12)
     return fig
