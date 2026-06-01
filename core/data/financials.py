@@ -1,9 +1,12 @@
-"""최근 분기 실적 / 주요 재무지표 조회.
+"""주요 재무지표 조회.
 
-우선순위:
-  KR: Naver Finance itemSummary (PER·PBR·EPS·배당·시총)
-      → Yahoo Finance quoteSummary (분기 실적, crumb 인증)
-  US: Yahoo Finance quoteSummary (crumb 인증)
+우선순위 (KR):
+  1) Naver 모바일 API  m.stock.naver.com/api/stock/{code}/integration
+  2) Naver itemSummary  api.finance.naver.com/service/itemSummary.naver
+  3) Yahoo Finance quoteSummary  (분기 실적 추가 시도)
+
+우선순위 (US):
+  Yahoo Finance quoteSummary (crumb 인증)
 """
 from datetime import datetime
 
@@ -17,11 +20,11 @@ _UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0 Safari/537.36"
 )
-
 _HEADERS_YF = {"User-Agent": _UA, "Accept": "application/json"}
 _HEADERS_NAVER = {
-    "User-Agent": _UA,
-    "Referer": "https://finance.naver.com",
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                  "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    "Referer": "https://m.stock.naver.com",
     "Accept": "application/json, text/plain, */*",
 }
 
@@ -39,23 +42,28 @@ _YF_MODULES = "incomeStatementHistoryQuarterly,defaultKeyStatistics,price"
 # ── 공통 유틸 ─────────────────────────────────────────────────────────────────
 
 def _resolve_kr_code(symbol: str) -> str:
-    """한글명 / 부분명 → 6자리 종목코드."""
     if symbol.isdigit():
         return symbol
     try:
         import FinanceDataReader as fdr
         listing = fdr.StockListing("KRX")
-        matched = listing[listing["Name"] == symbol]
-        if not matched.empty:
-            return str(matched.iloc[0]["Code"])
-        matched = listing[listing["Name"].str.contains(symbol, na=False)]
-        if not matched.empty:
-            matched = matched.copy()
-            matched["_len"] = matched["Name"].str.len()
-            return str(matched.sort_values("_len").iloc[0]["Code"])
+        m = listing[listing["Name"] == symbol]
+        if not m.empty:
+            return str(m.iloc[0]["Code"])
+        m = listing[listing["Name"].str.contains(symbol, na=False)]
+        if not m.empty:
+            m = m.copy(); m["_l"] = m["Name"].str.len()
+            return str(m.sort_values("_l").iloc[0]["Code"])
     except Exception:
         pass
     return symbol
+
+
+def _fmt_ratio(v) -> str:
+    try:
+        return f"{float(str(v).replace(',', '')):.2f}배" if v else "—"
+    except Exception:
+        return str(v) if v else "—"
 
 
 def _fmt_amount(val, currency: str) -> str:
@@ -68,67 +76,89 @@ def _fmt_amount(val, currency: str) -> str:
     return f"${b:.1f}B" if abs(b) >= 1 else f"${val/1e6:.0f}M"
 
 
-# ── Naver Finance (KR 전용) ───────────────────────────────────────────────────
+# ── Naver 모바일 API (KR 우선) ────────────────────────────────────────────────
 
-def _fetch_naver_kr(code: str) -> tuple[dict, str]:
-    """
-    Naver Finance itemSummary API로 주요 재무지표 조회.
-    반환: (result_dict, error_msg)
-    """
+def _fetch_naver_mobile(code: str) -> tuple[dict, str]:
+    """Naver 모바일 /integration 엔드포인트로 PER·PBR·EPS·시총 등 조회."""
+    url = f"https://m.stock.naver.com/api/stock/{code}/integration"
+    try:
+        resp = requests.get(url, headers=_HEADERS_NAVER, timeout=10, verify=False)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        return {}, f"Naver모바일({url}): {type(e).__name__}: {e}"
+
+    # totalInfos 배열에서 code → value 매핑
+    infos = data.get("totalInfos") or []
+    info_map: dict[str, str] = {}
+    for item in infos:
+        c = item.get("code") or item.get("name")
+        v = item.get("value")
+        if c and v:
+            info_map[str(c)] = str(v)
+
+    # 주요 필드 추출 (Naver 필드명 후보 복수로 시도)
+    def _get(*keys) -> str | None:
+        for k in keys:
+            v = info_map.get(k)
+            if v and v not in ("", "-", "N/A"):
+                return v
+        return None
+
+    per_v = _get("per", "PER")
+    pbr_v = _get("pbr", "PBR")
+    eps_v = _get("eps", "EPS")
+    bps_v = _get("bps", "BPS")
+    div_v = _get("dividendYield", "dividendRatio", "배당수익률")
+    cap_v = _get("marketValue", "시가총액")
+
+    if not per_v and not pbr_v:
+        return {}, (
+            f"Naver모바일: per/pbr 없음. "
+            f"사용 가능한 keys={list(info_map.keys())[:10]}"
+        )
+
+    extras: list[dict] = []
+    for label, val in [("EPS", eps_v), ("BPS", bps_v), ("배당률", div_v), ("시총", cap_v)]:
+        if val:
+            extras.append({"항목": label, "값": val})
+
+    return {
+        "quarters":  [],
+        "per":       _fmt_ratio(per_v),
+        "pbr":       _fmt_ratio(pbr_v),
+        "extras":    extras,
+        "currency":  "KRW",
+        "source":    "Naver Finance (모바일)",
+        "yf_symbol": f"{code}.KS",
+    }, ""
+
+
+def _fetch_naver_summary(code: str) -> tuple[dict, str]:
+    """Naver itemSummary API로 PER·PBR 조회 (레거시 폴백)."""
     url = f"https://api.finance.naver.com/service/itemSummary.naver?itemCode={code}"
     try:
         resp = requests.get(url, headers=_HEADERS_NAVER, timeout=10, verify=False)
         resp.raise_for_status()
         d = resp.json()
     except Exception as e:
-        return {}, f"Naver itemSummary: {type(e).__name__}: {e}"
+        return {}, f"NaverSummary({url}): {type(e).__name__}: {e}"
 
-    def _v(key: str) -> str | None:
-        v = d.get(key)
-        return str(v).strip() if v else None
+    per_v = d.get("per") or d.get("PER")
+    pbr_v = d.get("pbr") or d.get("PBR")
+    if not per_v and not pbr_v:
+        return {}, f"NaverSummary: per/pbr 없음 keys={list(d.keys())[:10]}"
 
-    def _fmt_ratio(v) -> str:
-        try:
-            return f"{float(v):.2f}배" if v else "—"
-        except Exception:
-            return str(v)
-
-    per = _fmt_ratio(_v("per"))
-    pbr = _fmt_ratio(_v("pbr"))
-
-    # 추가 지표
     extras: list[dict] = []
-    for label, key, suffix in [
-        ("EPS",    "eps",           "원"),
-        ("BPS",    "bps",           "원"),
-        ("배당률",  "dividendRatio", "%"),
-    ]:
-        v = _v(key)
+    for label, key in [("EPS", "eps"), ("BPS", "bps"), ("배당률", "dividendRatio")]:
+        v = d.get(key)
         if v:
-            try:
-                fv = float(v.replace(",", ""))
-                val_str = f"{fv:,.0f}{suffix}" if suffix == "원" else f"{fv:.2f}{suffix}"
-            except Exception:
-                val_str = v + suffix
-            extras.append({"항목": label, "값": val_str})
-
-    # 시가총액 (억원 단위로 오는 경우)
-    mc = _v("marketCap")
-    if mc:
-        try:
-            mc_v = float(mc.replace(",", ""))
-            mc_str = f"{mc_v/10000:.1f}조" if mc_v >= 10000 else f"{mc_v:.0f}억"
-            extras.append({"항목": "시가총액", "값": mc_str})
-        except Exception:
-            pass
-
-    if per == "—" and pbr == "—" and not extras:
-        return {}, "Naver: 유효 데이터 없음"
+            extras.append({"항목": label, "값": str(v)})
 
     return {
-        "quarters":  [],   # Naver itemSummary는 분기 실적 없음
-        "per":       per,
-        "pbr":       pbr,
+        "quarters":  [],
+        "per":       _fmt_ratio(per_v),
+        "pbr":       _fmt_ratio(pbr_v),
         "extras":    extras,
         "currency":  "KRW",
         "source":    "Naver Finance",
@@ -136,10 +166,9 @@ def _fetch_naver_kr(code: str) -> tuple[dict, str]:
     }, ""
 
 
-# ── Yahoo Finance (KR·US) ─────────────────────────────────────────────────────
+# ── Yahoo Finance ─────────────────────────────────────────────────────────────
 
 def _get_yf_session() -> tuple[requests.Session, str]:
-    """Yahoo Finance 세션 + crumb 토큰 취득."""
     session = requests.Session()
     session.headers.update(_HEADERS_YF)
     try:
@@ -159,11 +188,9 @@ def _get_yf_session() -> tuple[requests.Session, str]:
 
 
 def _fetch_yahoo(yf_sym: str, session: requests.Session, crumb: str) -> tuple[dict, str]:
-    """Yahoo Finance quoteSummary로 분기 실적 조회."""
     params = {"modules": _YF_MODULES}
     if crumb:
         params["crumb"] = crumb
-
     for url_tpl in _YF_SUMMARY_URLS:
         url = url_tpl.format(sym=yf_sym)
         try:
@@ -176,10 +203,8 @@ def _fetch_yahoo(yf_sym: str, session: requests.Session, crumb: str) -> tuple[di
             result = qs.get("result") or []
             if not result:
                 continue
-
             r = result[0]
             currency = (r.get("price") or {}).get("currency") or "USD"
-
             ish = ((r.get("incomeStatementHistoryQuarterly") or {})
                    .get("incomeStatementHistory") or [])
             quarters = []
@@ -201,19 +226,15 @@ def _fetch_yahoo(yf_sym: str, session: requests.Session, crumb: str) -> tuple[di
                     "영업이익": _fmt_amount(_r("operatingIncome"), currency),
                     "순이익":   _fmt_amount(_r("netIncome"),       currency),
                 })
-
             if not quarters:
                 continue
-
             ks = r.get("defaultKeyStatistics") or {}
 
             def _ks(key):
                 v = ks.get(key)
                 return v.get("raw") if isinstance(v, dict) else v
 
-            per_r = _ks("trailingPE")
-            pbr_r = _ks("priceToBook")
-
+            per_r, pbr_r = _ks("trailingPE"), _ks("priceToBook")
             return {
                 "quarters":  quarters,
                 "per":       f"{per_r:.1f}배" if per_r else "—",
@@ -223,65 +244,54 @@ def _fetch_yahoo(yf_sym: str, session: requests.Session, crumb: str) -> tuple[di
                 "source":    "Yahoo Finance",
                 "yf_symbol": yf_sym,
             }, ""
-
         except Exception as e:
-            pass  # 다음 URL 시도
-
+            pass
     return {}, f"Yahoo({yf_sym}): 분기 실적 없음"
 
 
 # ── 공개 인터페이스 ───────────────────────────────────────────────────────────
 
-def fetch_financials(symbol: str, market: str) -> tuple[dict, str]:
+def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
     """
-    주요 재무지표 + 분기 실적 조회.
-    Returns: (result_dict, error_msg)
-
-    result_dict:
-    {
-        "quarters":  [{"기간":..., "매출":..., "영업이익":..., "순이익":...}, ...],
-        "extras":    [{"항목":..., "값":...}, ...],   # Naver 추가 지표
-        "per":  "12.5배",
-        "pbr":  "1.03배",
-        "currency":  "KRW",
-        "source":    "Naver Finance" | "Yahoo Finance",
-        "yf_symbol": "005930.KS",
-    }
+    재무지표 조회. Returns: (result_dict, [error_messages])
+    오류 메시지는 각 시도별로 분리된 리스트로 반환.
     """
-    errors: list[str] = []
+    all_errors: list[str] = []
 
     if market == "KR":
         code = _resolve_kr_code(symbol)
 
-        # 1차: Naver Finance (PER·PBR·EPS·배당·시총)
-        fin, err = _fetch_naver_kr(code)
+        # 1차: Naver 모바일 API
+        fin, err = _fetch_naver_mobile(code)
         if fin:
-            # 2차(병행): Yahoo Finance로 분기 실적 추가 시도
+            # 병행: Yahoo Finance로 분기 실적 추가
             try:
                 session, crumb = _get_yf_session()
                 for suffix in [".KS", ".KQ"]:
                     yf_fin, _ = _fetch_yahoo(f"{code}{suffix}", session, crumb)
                     if yf_fin.get("quarters"):
                         fin["quarters"] = yf_fin["quarters"]
-                        fin["source"] = "Naver + Yahoo Finance"
+                        fin["source"] += " + Yahoo(분기)"
                         break
             except Exception:
                 pass
-            return fin, ""
-        errors.append(err)
+            return fin, []
+        all_errors.append(f"[Naver 모바일] {err}")
 
-    # US or KR Naver 실패 → Yahoo Finance
+        # 2차: Naver itemSummary
+        fin, err = _fetch_naver_summary(code)
+        if fin:
+            return fin, []
+        all_errors.append(f"[Naver 요약] {err}")
+
+    # US or KR 전부 실패 → Yahoo Finance
     session, crumb = _get_yf_session()
-    if market == "KR":
-        code = _resolve_kr_code(symbol)
-        yf_syms = [f"{code}.KS", f"{code}.KQ"]
-    else:
-        yf_syms = [symbol.upper()]
-
+    yf_syms = ([f"{_resolve_kr_code(symbol)}.KS", f"{_resolve_kr_code(symbol)}.KQ"]
+               if market == "KR" else [symbol.upper()])
     for yf_sym in yf_syms:
         fin, err = _fetch_yahoo(yf_sym, session, crumb)
         if fin:
-            return fin, ""
-        errors.append(err)
+            return fin, []
+        all_errors.append(f"[Yahoo {yf_sym}] {err}")
 
-    return {}, " | ".join(errors)
+    return {}, all_errors

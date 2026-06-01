@@ -29,8 +29,8 @@ def get_cache() -> OhlcvCache:
 
 
 @st.cache_data(ttl=3600)
-def get_financials(symbol: str, market: str) -> tuple[dict, str]:
-    """실적 데이터 1시간 캐시. (dict, error_msg) 반환."""
+def get_financials(symbol: str, market: str) -> tuple[dict, list]:
+    """재무 데이터 1시간 캐시. (dict, [error_msgs]) 반환."""
     return fetch_financials(symbol, market)
 
 
@@ -94,13 +94,14 @@ def _render_financials(symbol: str, market: str) -> None:
     )
 
     with st.spinner("재무 데이터 조회 중…"):
-        fin, err = get_financials(symbol, market)
+        fin, errors = get_financials(symbol, market)
 
     if not fin:
         st.caption("재무 데이터를 불러올 수 없습니다.")
-        if err:
+        if errors:
             with st.expander("🔍 오류 상세", expanded=False):
-                st.code(err, language=None)
+                for e in errors:
+                    st.caption(e)
         return
 
     # PER / PBR
