@@ -38,7 +38,13 @@ _YF_SUMMARY_URLS = [
     "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
     "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
 ]
-_YF_MODULES = "incomeStatementHistoryQuarterly,defaultKeyStatistics,price"
+_YF_MODULES = (
+    "incomeStatementHistoryQuarterly,"
+    "defaultKeyStatistics,"
+    "financialData,"
+    "summaryDetail,"
+    "price"
+)
 
 
 # ── 공통 유틸 ─────────────────────────────────────────────────────────────────
@@ -240,24 +246,100 @@ def _fetch_yahoo_v10(yf_sym: str, session: requests.Session,
                     "영업이익": _fmt_amount(_r("operatingIncome"), currency),
                     "순이익":   _fmt_amount(_r("netIncome"),       currency),
                 })
-            if not quarters:
-                errors.append(f"v10 {url}: 분기 실적 없음")
-                continue
-            ks = r.get("defaultKeyStatistics") or {}
-
-            def _ks(key):
-                v = ks.get(key)
+            # ── 각 모듈 헬퍼 ──────────────────────────────────────────────
+            def _raw(d: dict, key: str):
+                v = d.get(key)
                 return v.get("raw") if isinstance(v, dict) else v
 
-            per_r, pbr_r = _ks("trailingPE"), _ks("priceToBook")
+            ks = r.get("defaultKeyStatistics") or {}
+            fd = r.get("financialData") or {}
+            sd = r.get("summaryDetail") or {}
+
+            def _ks(k): return _raw(ks, k)
+            def _fd(k): return _raw(fd, k)
+            def _sd(k): return _raw(sd, k)
+
+            def _pct(v):   return f"{v * 100:.1f}%" if v is not None else None
+            def _x(v):     return f"{v:.2f}배" if v is not None else None
+            def _price(v): return f"${v:,.2f}" if v is not None else None
+
+            # 밸류에이션
+            per_r    = _ks("trailingPE") or _sd("trailingPE")
+            fpe_r    = _ks("forwardPE")  or _sd("forwardPE")
+            pbr_r    = _ks("priceToBook")
+            eps_r    = _ks("trailingEps")
+            feps_r   = _ks("forwardEps")
+            peg_r    = _ks("pegRatio")
+            div_r    = _sd("dividendYield")
+            tgt_r    = _fd("targetMeanPrice")
+            rec_key  = fd.get("recommendationKey") or ""
+            rec_n    = _fd("numberOfAnalystOpinions")
+
+            _REC = {"buy":"매수","strongBuy":"강력매수","hold":"중립",
+                    "sell":"매도","strongSell":"강력매도"}
+            rec_str = _REC.get(rec_key, rec_key)
+            if rec_n: rec_str += f" ({int(rec_n)}명)"
+
+            valuation: dict[str, str] = {}
+            if per_r:  valuation["PER(후행)"]  = _x(per_r)
+            if fpe_r:  valuation["PER(선행)"]  = _x(fpe_r)
+            if pbr_r:  valuation["PBR"]         = _x(pbr_r)
+            if peg_r:  valuation["PEG"]         = f"{peg_r:.2f}"
+            if eps_r:  valuation["EPS(후행)"]   = _price(eps_r) if currency != "KRW" else f"{eps_r:,.0f}원"
+            if feps_r: valuation["EPS(선행)"]   = _price(feps_r) if currency != "KRW" else f"{feps_r:,.0f}원"
+            if div_r:  valuation["배당수익률"]   = _pct(div_r)
+            if tgt_r:  valuation["목표주가"]     = _price(tgt_r) if currency != "KRW" else f"{tgt_r:,.0f}원"
+            if rec_str: valuation["투자의견"]   = rec_str
+
+            # 수익성
+            roe_r  = _fd("returnOnEquity")
+            roa_r  = _fd("returnOnAssets")
+            opm_r  = _fd("operatingMargins")
+            npm_r  = _fd("profitMargins")
+            rev_g  = _fd("revenueGrowth")
+            earn_g = _fd("earningsGrowth")
+            fcf_r  = _fd("freeCashflow")
+
+            profitability: dict[str, str] = {}
+            if roe_r:  profitability["ROE"]           = _pct(roe_r)
+            if roa_r:  profitability["ROA"]           = _pct(roa_r)
+            if opm_r:  profitability["영업이익률"]     = _pct(opm_r)
+            if npm_r:  profitability["순이익률"]       = _pct(npm_r)
+            if rev_g:  profitability["매출성장(YoY)"]  = _pct(rev_g)
+            if earn_g: profitability["이익성장(YoY)"]  = _pct(earn_g)
+            if fcf_r:  profitability["잉여현금흐름"]    = _fmt_amount(fcf_r, currency)
+
+            # 시장 정보
+            mktcap_r = _sd("marketCap") or _raw(r.get("price") or {}, "marketCap")
+            beta_r   = _ks("beta") or _sd("beta")
+            high52_r = _sd("fiftyTwoWeekHigh")
+            low52_r  = _sd("fiftyTwoWeekLow")
+            cr_r     = _fd("currentRatio")
+            de_r     = _fd("debtToEquity")
+
+            market: dict[str, str] = {}
+            if mktcap_r: market["시가총액"]  = _fmt_amount(mktcap_r, currency)
+            if beta_r:   market["베타"]      = f"{beta_r:.2f}"
+            if high52_r: market["52주 최고"] = _price(high52_r) if currency != "KRW" else f"{high52_r:,.0f}원"
+            if low52_r:  market["52주 최저"] = _price(low52_r)  if currency != "KRW" else f"{low52_r:,.0f}원"
+            if cr_r:     market["유동비율"]  = f"{cr_r:.2f}"
+            if de_r:     market["부채비율"]  = f"{de_r:.1f}%"
+
+            if not quarters and not valuation:
+                errors.append(f"v10 {url}: 유효 데이터 없음")
+                continue
+
             return {
-                "quarters":  quarters,
-                "per":       f"{per_r:.1f}배" if per_r else "—",
-                "pbr":       f"{pbr_r:.2f}배" if pbr_r else "—",
-                "extras":    [],
-                "currency":  currency,
-                "source":    "Yahoo Finance",
-                "yf_symbol": yf_sym,
+                "quarters":      quarters,
+                "valuation":     valuation,
+                "profitability": profitability,
+                "market":        market,
+                "per":           f"{per_r:.1f}배" if per_r else "—",
+                "pbr":           f"{pbr_r:.2f}배" if pbr_r else "—",
+                "extras":        [],
+                "currency":      currency,
+                "source":        "Yahoo Finance",
+                "yf_symbol":     yf_sym,
             }, ""
         except Exception as e:
             errors.append(f"v10 {url}: {type(e).__name__}: {str(e)[:80]}")

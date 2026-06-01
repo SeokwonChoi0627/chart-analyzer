@@ -83,8 +83,25 @@ div.stFormSubmitButton > button:active {
 """
 
 
+def _section_title(text: str) -> None:
+    st.markdown(
+        f'<div style="font-size:10px;font-weight:600;color:#aaa;letter-spacing:0.6px;'
+        f'text-transform:uppercase;margin:10px 0 4px;">{text}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _kv_table(data: dict) -> None:
+    """key-value dict를 2열 간결 테이블로 표시."""
+    if not data:
+        return
+    rows = list(data.items())
+    df = pd.DataFrame(rows, columns=["항목", "값"]).set_index("항목")
+    st.dataframe(df, use_container_width=True)
+
+
 def _render_financials(symbol: str, market: str) -> None:
-    """사이드바 하단 — 주요 재무지표 + 분기 실적 표시."""
+    """사이드바 하단 — 종합 재무정보 표시."""
     st.divider()
     st.markdown(
         '<div style="font-size:12px;font-weight:600;color:#aaa;'
@@ -104,27 +121,54 @@ def _render_financials(symbol: str, market: str) -> None:
                     st.caption(e)
         return
 
-    # PER / PBR
-    per, pbr = fin.get("per", "—"), fin.get("pbr", "—")
-    if per != "—" or pbr != "—":
+    # ── 밸류에이션 ──────────────────────────────────────────────────────────────
+    valuation = fin.get("valuation") or {}
+    extras    = fin.get("extras", [])   # Naver 소스 폴백
+
+    if valuation:
+        _section_title("밸류에이션")
+        # PER / PBR 상단 메트릭
+        per = valuation.get("PER(후행)") or fin.get("per", "—")
+        pbr = valuation.get("PBR")       or fin.get("pbr", "—")
         c1, c2 = st.columns(2)
         c1.metric("PER", per)
         c2.metric("PBR", pbr)
-
-    # 추가 지표 (EPS, BPS, 배당률, 시총 — Naver 소스)
-    extras = fin.get("extras", [])
-    if extras:
+        # 나머지 항목
+        rest = {k: v for k, v in valuation.items()
+                if k not in ("PER(후행)", "PBR") and v}
+        _kv_table(rest)
+    elif extras:
+        # Naver 소스 — 기존 extras 형식
+        per, pbr = fin.get("per", "—"), fin.get("pbr", "—")
+        if per != "—" or pbr != "—":
+            c1, c2 = st.columns(2)
+            c1.metric("PER", per)
+            c2.metric("PBR", pbr)
         df_ext = pd.DataFrame(extras).set_index("항목")
         st.dataframe(df_ext, use_container_width=True)
+    else:
+        per, pbr = fin.get("per", "—"), fin.get("pbr", "—")
+        if per != "—" or pbr != "—":
+            c1, c2 = st.columns(2)
+            c1.metric("PER", per)
+            c2.metric("PBR", pbr)
 
-    # 분기 실적 테이블
+    # ── 수익성 ──────────────────────────────────────────────────────────────────
+    profitability = fin.get("profitability") or {}
+    if profitability:
+        _section_title("수익성")
+        _kv_table(profitability)
+
+    # ── 시장 정보 ────────────────────────────────────────────────────────────────
+    market_info = fin.get("market") or {}
+    if market_info:
+        _section_title("시장 정보")
+        _kv_table(market_info)
+
+    # ── 분기 실적 ────────────────────────────────────────────────────────────────
     quarters = fin.get("quarters", [])
     if quarters:
-        st.markdown(
-            '<div style="font-size:11px;color:#aaa;margin:8px 0 4px;">'
-            '최근 분기 실적</div>',
-            unsafe_allow_html=True,
-        )
+        _section_title("최근 분기 실적")
         df_q = pd.DataFrame(quarters)
         st.dataframe(df_q, hide_index=True, use_container_width=True)
 
