@@ -53,18 +53,8 @@ _YF_QUOTE_URLS = [
 # ── 공통 유틸 ─────────────────────────────────────────────────────────────────
 
 def _resolve_kr_code(symbol: str) -> str:
-    """한글 종목명 → 6자리 코드. pykrx_kr의 3단계 폴백 로직 재사용."""
-    if symbol.isdigit():
-        return symbol
-    # pykrx_kr의 3단계 폴백 사용 (정적맵 → Naver → FDR)
-    try:
-        from .pykrx_kr import PykrxProvider
-        code = PykrxProvider._name_to_ticker(symbol)
-        if code:
-            return code
-    except Exception:
-        pass
-    return symbol
+    from .kr_lookup import resolve_kr_code
+    return resolve_kr_code(symbol)
 
 
 def _fmt_ratio(v) -> str:

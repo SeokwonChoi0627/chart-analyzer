@@ -40,17 +40,8 @@ _YF_BASE_URLS = [
 # ── 한글 종목명 → 종목코드 변환 ──────────────────────────────────────────────
 
 def _resolve_kr_code(symbol: str) -> str:
-    """한글 종목명 → 6자리 코드. pykrx_kr 3단계 폴백(정적맵→Naver→FDR) 재사용."""
-    if symbol.isdigit():
-        return symbol
-    try:
-        from .pykrx_kr import PykrxProvider
-        code = PykrxProvider._name_to_ticker(symbol)
-        if code:
-            return code
-    except Exception:
-        pass
-    return symbol
+    from .kr_lookup import resolve_kr_code
+    return resolve_kr_code(symbol)
 
 
 # ── Yahoo Finance ─────────────────────────────────────────────────────────────

@@ -115,17 +115,6 @@ class PykrxProvider(DataProvider):
 
     @staticmethod
     def _name_to_ticker(name: str) -> str | None:
-        name_nfc = _normalize(name)
-        name_lower = name_nfc.lower()
-
-        # 1순위: 정적 맵 (즉시, 네트워크 불필요)
-        if name_lower in _COMMON_STOCKS:
-            return _COMMON_STOCKS[name_lower]
-
-        # 2순위: Naver 자동완성 (서버에서 신뢰성 높음)
-        code = _lookup_naver(name_nfc)
-        if code:
-            return code
-
-        # 3순위: FinanceDataReader KRX listing (로컬에서 신뢰성 높음)
-        return _lookup_fdr(name_nfc)
+        from .kr_lookup import resolve_kr_code
+        result = resolve_kr_code(name)
+        return result if result != name else None
