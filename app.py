@@ -230,6 +230,28 @@ def main():
     with st.sidebar:
         _render_financials(symbol.strip(), market)
 
+    # ── 종목 헤더 (종목명 + 티커) ─────────────────────────────────────────────
+    fin_data, _ = get_financials(symbol.strip(), market)
+    company_name = fin_data.get("company_name", "") if fin_data else ""
+    ticker_upper = symbol.strip().upper()
+    if company_name and company_name.upper() != ticker_upper:
+        header_html = (
+            f'<div style="margin-bottom:16px;font-family:system-ui,-apple-system,sans-serif;">'
+            f'<div style="font-size:26px;font-weight:700;color:#1d1d1f;letter-spacing:-0.5px;line-height:1.15;">'
+            f'{company_name}</div>'
+            f'<div style="font-size:14px;font-weight:500;color:#888;margin-top:2px;letter-spacing:0.2px;">'
+            f'{ticker_upper}</div>'
+            f'</div>'
+        )
+    else:
+        header_html = (
+            f'<div style="margin-bottom:16px;font-family:system-ui,-apple-system,sans-serif;">'
+            f'<div style="font-size:26px;font-weight:700;color:#1d1d1f;letter-spacing:-0.5px;">'
+            f'{ticker_upper}</div>'
+            f'</div>'
+        )
+    st.markdown(header_html, unsafe_allow_html=True)
+
     # ── 섹션 1: 일봉 분석 ────────────────────────────────────────────────────
     col1, col2 = st.columns([1, 2])
     with col1:

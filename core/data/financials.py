@@ -45,6 +45,9 @@ _YF_MODULES = (
     "summaryDetail,"
     "price"
 )
+_YF_QUOTE_URLS = [
+    "https://finance.yahoo.com/quote/{sym}",
+]
 
 
 # ── 공통 유틸 ─────────────────────────────────────────────────────────────────
@@ -159,14 +162,16 @@ def _fetch_naver_mobile(code: str) -> tuple[dict, str]:
         ]
         if val
     ]
+    company_name = str(data.get("stockName") or data.get("name") or "")
     return {
-        "quarters":  [],
-        "per":       _fmt_ratio(per_v),
-        "pbr":       _fmt_ratio(pbr_v),
-        "extras":    extras,
-        "currency":  "KRW",
-        "source":    "Naver Finance",
-        "yf_symbol": f"{code}.KS",
+        "quarters":     [],
+        "per":          _fmt_ratio(per_v),
+        "pbr":          _fmt_ratio(pbr_v),
+        "extras":       extras,
+        "currency":     "KRW",
+        "company_name": company_name,
+        "source":       "Naver Finance",
+        "yf_symbol":    f"{code}.KS",
     }, ""
 
 
@@ -396,6 +401,107 @@ def _fetch_yahoo_v7(sym: str, session: requests.Session,
     return {}, " | ".join(errors)
 
 
+# ── Yahoo Finance HTML 파싱 (crumb 불필요, 주요 지표 추출) ───────────────────────
+
+def _fetch_yahoo_html(sym: str, session: requests.Session) -> tuple[dict, str]:
+    """
+    finance.yahoo.com 페이지 HTML에서 직접 재무지표 추출.
+    crumb/쿠키 불필요 — SSL MITM 환경에서도 동작.
+    PER·PBR·시총·EPS·배당률·매출(TTM) 등 반환.
+    """
+    import re as _re
+
+    url = f"https://finance.yahoo.com/quote/{sym}"
+    try:
+        resp = session.get(url, timeout=15, verify=False,
+                           headers={**_HEADERS_YF, "Accept": "text/html,application/xhtml+xml,*/*"})
+        resp.raise_for_status()
+        text = resp.text
+    except Exception as e:
+        return {}, f"HTML fetch {sym}: {type(e).__name__}: {e}"
+
+    def _extract(key: str) -> float | None:
+        # escaped JSON: \"key\":{\"raw\":12.34
+        m = _re.search(rf'\\"(?:{key})\\".*?\\"raw\\":([\d.eE+\-]+)', text)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                pass
+        # unescaped JSON: "key":{"raw":12.34
+        m2 = _re.search(rf'"{key}"\s*:\s*\{{"raw"\s*:\s*([\d.eE+\-]+)', text)
+        if m2:
+            try:
+                return float(m2.group(1))
+            except ValueError:
+                pass
+        return None
+
+    def _extract_str(key: str) -> str | None:
+        # HTML tag: <fin-streamer data-field="key">value</fin-streamer>
+        m = _re.search(
+            rf'data-field="{key}"[^>]*class="[^"]*"[^>]*>([^<]+)<',
+            text,
+        )
+        if m:
+            return m.group(1).strip()
+        return None
+
+    # 회사명
+    name_m = _re.search(r'<h1[^>]*class="[^"]*yf-xxbei9[^"]*"[^>]*>([^<]+)</h1>', text)
+    company_name = name_m.group(1).strip() if name_m else ""
+
+    per_r  = _extract("trailingPE")
+    fpe_r  = _extract("forwardPE")
+    pbr_r  = _extract("priceToBook")
+    eps_r  = _extract("trailingEps")
+    div_r  = _extract("dividendYield")
+    cap_r  = _extract("marketCap")
+    rev_r  = _extract("totalRevenue")
+    npm_r  = _extract("profitMargins")
+    beta_r = _extract("beta")
+    h52_r  = _extract("fiftyTwoWeekHigh")
+    l52_r  = _extract("fiftyTwoWeekLow")
+
+    if not per_r and not cap_r and not pbr_r:
+        return {}, f"HTML {sym}: 재무지표 없음 (page len={len(text)})"
+
+    def _x(v):     return f"{v:.2f}배" if v is not None else None
+    def _pct(v):   return f"{v * 100:.2f}%" if v is not None else None
+    def _price(v): return f"${v:,.2f}" if v is not None else None
+
+    valuation: dict[str, str] = {}
+    if per_r:  valuation["PER(후행)"] = _x(per_r)
+    if fpe_r:  valuation["PER(선행)"] = _x(fpe_r)
+    if pbr_r:  valuation["PBR"]       = _x(pbr_r)
+    if eps_r:  valuation["EPS"]       = _price(eps_r)
+    if div_r:  valuation["배당수익률"] = _pct(div_r)
+
+    profitability: dict[str, str] = {}
+    if npm_r:  profitability["순이익률"] = _pct(npm_r)
+    if rev_r:  profitability["연매출(TTM)"] = _fmt_amount(rev_r, "USD")
+
+    market: dict[str, str] = {}
+    if cap_r:  market["시가총액"]  = _fmt_amount(cap_r, "USD")
+    if beta_r: market["베타"]      = f"{beta_r:.2f}"
+    if h52_r:  market["52주 최고"] = _price(h52_r)
+    if l52_r:  market["52주 최저"] = _price(l52_r)
+
+    return {
+        "quarters":      [],
+        "valuation":     valuation,
+        "profitability": profitability,
+        "market":        market,
+        "per":           _x(per_r) or "—",
+        "pbr":           _x(pbr_r) or "—",
+        "extras":        [],
+        "currency":      "USD",
+        "company_name":  company_name,
+        "source":        "Yahoo Finance",
+        "yf_symbol":     sym,
+    }, ""
+
+
 # ── Yahoo Finance v8 chart meta (항상 동작 폴백) ──────────────────────────────
 
 def _fetch_yahoo_v8_meta(sym: str, session: requests.Session) -> tuple[dict, str]:
@@ -431,7 +537,7 @@ def _fetch_yahoo_v8_meta(sym: str, session: requests.Session) -> tuple[dict, str
             low52   = meta.get("fiftyTwoWeekLow")
             mktcap  = meta.get("marketCap")
             vol     = meta.get("regularMarketVolume")
-            name    = meta.get("longName") or meta.get("shortName") or sym
+            company_name = meta.get("longName") or meta.get("shortName") or sym
 
             extras.append({"항목": "현재가", "값": f"${price:,.2f}"})
             if high52:
@@ -444,13 +550,14 @@ def _fetch_yahoo_v8_meta(sym: str, session: requests.Session) -> tuple[dict, str
                 extras.append({"항목": "거래량", "값": f"{vol:,}"})
 
             return {
-                "quarters":  [],
-                "per":       "—",
-                "pbr":       "—",
-                "extras":    extras,
-                "currency":  currency,
-                "source":    f"Yahoo Finance (시세 기본, PER/PBR 조회 불가)",
-                "yf_symbol": sym,
+                "quarters":    [],
+                "per":         "—",
+                "pbr":         "—",
+                "extras":      extras,
+                "currency":    currency,
+                "company_name": company_name,
+                "source":      "Yahoo Finance (시세 기본, PER/PBR 조회 불가)",
+                "yf_symbol":   sym,
             }, ""
         except Exception as e:
             errors.append(f"v8 {base}: {type(e).__name__}: {str(e)[:80]}")
@@ -502,19 +609,29 @@ def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
     sym = symbol.upper()
     session, crumb = _get_yf_session()
 
-    # 1차: v10 quoteSummary (시총·PER·PBR·분기실적 모두 포함)
+    # 1차: HTML 파싱 (crumb 불필요 — SSL MITM 환경에서도 동작)
+    fin, err = _fetch_yahoo_html(sym, session)
+    if fin:
+        # v8에서 종목명 보완 (HTML 파싱 실패 시 대비)
+        if not fin.get("company_name"):
+            v8fin, _ = _fetch_yahoo_v8_meta(sym, session)
+            fin["company_name"] = v8fin.get("company_name", "")
+        return fin, []
+    all_errors.append(f"[Yahoo HTML] {err}")
+
+    # 2차: v10 quoteSummary + crumb
     fin, err = _fetch_yahoo_v10(sym, session, crumb)
     if fin:
         return fin, []
     all_errors.append(f"[Yahoo v10] {err}")
 
-    # 2차: v7 + crumb (v10 실패 시)
+    # 3차: v7 + crumb
     fin, err = _fetch_yahoo_v7(sym, session, crumb)
     if fin:
         return fin, []
     all_errors.append(f"[Yahoo v7] {err}")
 
-    # 3차: v8 chart meta (항상 동작 — 현재가·52주범위·시총)
+    # 4차: v8 chart meta (현재가·52주범위·시총만)
     fin, err = _fetch_yahoo_v8_meta(sym, session)
     if fin:
         return fin, []
