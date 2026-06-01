@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 
 from core.cache import OhlcvCache
 from core.data.orchestrator import fetch, DataUnavailableError
-from core.data.excel import parse_ohlcv_frame
 from core.data.intraday import fetch_15min
+from core.data.financials import fetch_financials
 from core.data.base import detect_market
 from core.indicators import compute_all
 from core.signals import generate_signal, generate_intraday_signal
@@ -16,7 +16,7 @@ from ui.panels import render_signal_card, render_reasons_table, render_intraday_
 
 load_dotenv()
 
-st.set_page_config(page_title="차트 분석 매수/매도 추천기", page_icon="📈", layout="wide")
+st.set_page_config(page_title="차트 분석기", page_icon="📈", layout="wide")
 
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "data", "cache.db")
 PERIOD_DAYS = 190  # 6개월 고정
@@ -26,6 +26,12 @@ PERIOD_DAYS = 190  # 6개월 고정
 def get_cache() -> OhlcvCache:
     os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
     return OhlcvCache(CACHE_PATH)
+
+
+@st.cache_data(ttl=3600)
+def get_financials(symbol: str, market: str) -> dict:
+    """실적 데이터 1시간 캐시."""
+    return fetch_financials(symbol, market)
 
 
 _CSS = """
@@ -77,6 +83,39 @@ div.stFormSubmitButton > button:active {
 """
 
 
+def _render_financials(symbol: str, market: str) -> None:
+    """사이드바 하단 — 최근 분기 실적 표시."""
+    st.divider()
+    st.markdown(
+        '<div style="font-size:12px;font-weight:600;color:#aaa;'
+        'letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;">'
+        '최근 분기 실적</div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.spinner("실적 조회 중…"):
+        fin = get_financials(symbol, market)
+
+    if not fin:
+        st.caption("실적 데이터를 불러올 수 없습니다.")
+        return
+
+    quarters = fin.get("quarters", [])
+    if quarters:
+        df_q = pd.DataFrame(quarters)
+        st.dataframe(df_q, hide_index=True, use_container_width=True)
+
+    per, pbr = fin.get("per", "—"), fin.get("pbr", "—")
+    if per != "—" or pbr != "—":
+        c1, c2 = st.columns(2)
+        c1.metric("PER", per)
+        c2.metric("PBR", pbr)
+
+    yf_sym = fin.get("yf_symbol", "")
+    if yf_sym:
+        st.caption(f"출처: Yahoo Finance ({yf_sym})")
+
+
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
 
@@ -84,7 +123,7 @@ def main():
     now = datetime.now()
     title_col, time_col = st.columns([3, 1])
     with title_col:
-        st.title("📈 차트 분석 매수/매도 추천기")
+        st.title("차트 분석기")
     with time_col:
         st.markdown(
             f'<div style="text-align:right;padding-top:18px;'
@@ -97,44 +136,30 @@ def main():
             unsafe_allow_html=True,
         )
 
-    # ── 사이드바 ──────────────────────────────────────────────────────────────
+    # ── 사이드바: 입력 폼 ─────────────────────────────────────────────────────
     with st.sidebar:
         st.header("설정")
         with st.form("analysis_form"):
             symbol = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
-            st.divider()
-            st.caption("자동 조회 실패 시 아래로 업로드")
-            uploaded = st.file_uploader("엑셀/CSV 업로드", type=["xlsx", "xls", "csv"])
             run = st.form_submit_button("분석 실행", use_container_width=True)
 
     if not run:
         st.info("좌측에서 종목을 입력하고 '분석 실행'을 누르세요.")
         return
 
-    df = None
-    source = ""
+    if not symbol.strip():
+        st.warning("종목을 입력하세요.")
+        return
 
-    if uploaded is not None:
-        try:
-            raw = (pd.read_csv(uploaded) if uploaded.name.lower().endswith(".csv")
-                   else pd.read_excel(uploaded))
-            df = parse_ohlcv_frame(raw)
-            source = f"업로드({uploaded.name})"
-        except Exception as e:
-            st.error(f"파일 파싱 실패: {e}")
-            return
-    else:
-        if not symbol.strip():
-            st.warning("종목을 입력하거나 파일을 업로드하세요.")
-            return
-        try:
-            df, source = fetch(symbol, PERIOD_DAYS, get_cache())
-        except DataUnavailableError as e:
-            st.error(str(e))
-            return
-        except Exception as e:
-            st.error(f"데이터 조회 중 오류: {e}")
-            return
+    # ── 일봉 데이터 조회 ──────────────────────────────────────────────────────
+    try:
+        df, source = fetch(symbol, PERIOD_DAYS, get_cache())
+    except DataUnavailableError as e:
+        st.error(str(e))
+        return
+    except Exception as e:
+        st.error(f"데이터 조회 중 오류: {e}")
+        return
 
     if df is None or df.empty:
         st.error("데이터가 비어 있습니다.")
@@ -142,10 +167,15 @@ def main():
     if len(df) < 60:
         st.warning(f"데이터가 {len(df)}일치뿐입니다. 일부 지표(60일선 등)는 부정확할 수 있습니다.")
 
-    enriched = compute_all(df)
-    signal = generate_signal(enriched)
+    market     = detect_market(symbol.strip())
+    enriched   = compute_all(df)
+    signal     = generate_signal(enriched)
     analyzed_at = now.strftime("%Y-%m-%d %H:%M:%S")
-    chart_title = symbol.strip() or (uploaded.name if uploaded else "")
+    chart_title = symbol.strip()
+
+    # ── 사이드바 하단: 최근 실적 ──────────────────────────────────────────────
+    with st.sidebar:
+        _render_financials(symbol.strip(), market)
 
     # ── 섹션 1: 일봉 분석 ────────────────────────────────────────────────────
     col1, col2 = st.columns([1, 2])
@@ -156,9 +186,6 @@ def main():
         st.plotly_chart(build_chart(enriched, chart_title), use_container_width=True)
 
     # ── 섹션 2: 15분봉 단기 분석 ─────────────────────────────────────────────
-    if uploaded is not None or not symbol.strip():
-        return  # 업로드 모드는 15분봉 스킵
-
     st.divider()
     st.markdown(
         '<div style="font-size:16px;font-weight:600;color:#1d1d1f;'
@@ -168,7 +195,6 @@ def main():
         unsafe_allow_html=True,
     )
 
-    market = detect_market(symbol.strip())
     with st.spinner("15분봉 데이터 조회 중…"):
         df_15m, err_15m = fetch_15min(symbol.strip(), market, days=5)
 
@@ -191,11 +217,11 @@ def main():
         with col4:
             st.warning("15분봉 데이터를 불러오지 못했습니다.")
             if err_15m:
-                with st.expander("🔍 오류 상세 (진단용)", expanded=True):
+                with st.expander("🔍 오류 상세 (진단용)", expanded=False):
                     st.code(err_15m, language=None)
     else:
         enriched_15m = compute_all(df_15m)
-        signal_15m = generate_intraday_signal(enriched_15m)
+        signal_15m   = generate_intraday_signal(enriched_15m)
         with col3:
             render_intraday_panel(signal_15m)
         with col4:
