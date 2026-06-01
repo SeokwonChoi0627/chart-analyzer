@@ -249,20 +249,22 @@ def _fetch_yahoo(yf_sym: str, session: requests.Session, crumb: str) -> tuple[di
     return {}, f"Yahoo({yf_sym}): 분기 실적 없음"
 
 
-def _fetch_yahoo_v7(symbol: str) -> tuple[dict, str]:
+def _fetch_yahoo_quote(symbol: str) -> tuple[dict, str]:
     """
-    Yahoo Finance v7 quote API — crumb 불필요, 기본 재무지표 반환.
-    PER·PBR·EPS·배당률·시총 제공 (분기 실적 없음).
+    Yahoo Finance quote API (v7/v6 순으로 시도) — crumb 불필요.
+    PER·PBR·EPS·배당률·시총 반환.
     """
-    params = {
-        "symbols": symbol,
-        "fields": (
-            "trailingPE,priceToBook,epsTrailingTwelveMonths,"
-            "dividendYield,marketCap,currency,shortName"
-        ),
-    }
-    for base in ["https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"]:
-        url = f"{base}/v7/finance/quote"
+    errors: list[str] = []
+
+    # 시도할 (URL, params) 조합 목록
+    attempts = [
+        (f"https://query1.finance.yahoo.com/v7/finance/quote", {"symbols": symbol}),
+        (f"https://query2.finance.yahoo.com/v7/finance/quote", {"symbols": symbol}),
+        (f"https://query1.finance.yahoo.com/v6/finance/quote", {"symbols": symbol}),
+        (f"https://query2.finance.yahoo.com/v6/finance/quote", {"symbols": symbol}),
+    ]
+
+    for url, params in attempts:
         try:
             resp = requests.get(url, params=params, headers=_HEADERS_YF,
                                 timeout=10, verify=False)
@@ -270,17 +272,21 @@ def _fetch_yahoo_v7(symbol: str) -> tuple[dict, str]:
             data = resp.json()
             result = (data.get("quoteResponse") or {}).get("result") or []
             if not result:
+                errors.append(f"{url}: result 없음 (응답 앞부분: {resp.text[:80]})")
                 continue
+
             r = result[0]
             currency = r.get("currency") or "USD"
             per_v = r.get("trailingPE")
             pbr_v = r.get("priceToBook")
             if not per_v and not pbr_v:
+                available = [k for k, v in r.items() if v is not None][:8]
+                errors.append(f"{url}: per/pbr 없음, 사용가능 키={available}")
                 continue
 
             extras: list[dict] = []
             eps = r.get("epsTrailingTwelveMonths")
-            div = r.get("dividendYield")   # 소수 (e.g. 0.0057 = 0.57%)
+            div = r.get("dividendYield")   # 소수 e.g. 0.0057 = 0.57%
             cap = r.get("marketCap")
             if eps is not None:
                 extras.append({"항목": "EPS", "값": f"${eps:.2f}"})
@@ -298,9 +304,11 @@ def _fetch_yahoo_v7(symbol: str) -> tuple[dict, str]:
                 "source":    "Yahoo Finance",
                 "yf_symbol": symbol,
             }, ""
+
         except Exception as e:
-            continue
-    return {}, f"YF v7({symbol}): {type(Exception()).__name__}"
+            errors.append(f"{url}: {type(e).__name__}: {str(e)[:100]}")
+
+    return {}, " | ".join(errors)
 
 
 # ── 공개 인터페이스 ───────────────────────────────────────────────────────────
@@ -351,10 +359,10 @@ def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
     # ── 미국 주식 ──────────────────────────────────────────────────────────────
     sym = symbol.upper()
 
-    # 1차: Yahoo Finance v7 (crumb 불필요 — 기본 지표)
-    fin, err = _fetch_yahoo_v7(sym)
+    # 1차: Yahoo Finance v7/v6 (crumb 불필요 — 기본 지표)
+    fin, err = _fetch_yahoo_quote(sym)
     if not fin:
-        all_errors.append(f"[Yahoo v7] {err}")
+        all_errors.append(f"[Yahoo v7/v6] {err}")
 
     if fin:
         # 병행: v10으로 분기 실적 추가 시도
