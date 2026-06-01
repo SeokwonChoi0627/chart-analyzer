@@ -115,7 +115,8 @@ _INTRADAY_CFG: dict[str, dict] = {
 
 
 def _intraday_gauge_html(score: float) -> str:
-    pct = (max(-3.0, min(3.0, score)) + 3.0) / 6.0 * 100
+    # ±4.5 범위 (RSI±1.5 + MACD±1.0 + 거래량·이평선·BB·캔들 각 ±0.5)
+    pct = (max(-4.5, min(4.5, score)) + 4.5) / 9.0 * 100
     return (
         f'<div style="margin:10px 0 6px;">'
         f'<div style="position:relative;height:8px;border-radius:4px;'
@@ -129,7 +130,7 @@ def _intraday_gauge_html(score: float) -> str:
         f'</div>'
         f'<div style="display:flex;justify-content:space-between;'
         f'margin-top:4px;font-size:9px;color:#ccc;">'
-        f'<span>−3.0</span><span>0</span><span>+3.0</span>'
+        f'<span>−4.5</span><span>0</span><span>+4.5</span>'
         f'</div>'
         f'</div>'
     )
@@ -159,7 +160,7 @@ def render_intraday_panel(signal_15m: dict) -> None:
         f'letter-spacing:-0.2px;">{verdict}{time_note}</div>'
         f'{_intraday_gauge_html(score)}'
         f'<div style="font-size:12px;color:{color};font-weight:600;">'
-        f'단기 점수 {score:+.2f} / ±3.0</div>'
+        f'단기 점수 {score:+.2f} / ±4.5</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
