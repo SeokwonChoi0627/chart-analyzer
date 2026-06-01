@@ -84,40 +84,52 @@ div.stFormSubmitButton > button:active {
 
 
 def _render_financials(symbol: str, market: str) -> None:
-    """사이드바 하단 — 최근 분기 실적 표시."""
+    """사이드바 하단 — 주요 재무지표 + 분기 실적 표시."""
     st.divider()
     st.markdown(
         '<div style="font-size:12px;font-weight:600;color:#aaa;'
         'letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;">'
-        '최근 분기 실적</div>',
+        '재무 정보</div>',
         unsafe_allow_html=True,
     )
 
-    with st.spinner("실적 조회 중…"):
+    with st.spinner("재무 데이터 조회 중…"):
         fin, err = get_financials(symbol, market)
 
     if not fin:
-        st.caption("실적 데이터를 불러올 수 없습니다.")
+        st.caption("재무 데이터를 불러올 수 없습니다.")
         if err:
             with st.expander("🔍 오류 상세", expanded=False):
                 st.code(err, language=None)
         return
 
-    quarters = fin.get("quarters", [])
-    if quarters:
-        df_q = pd.DataFrame(quarters)
-        st.dataframe(df_q, hide_index=True, use_container_width=True)
-
+    # PER / PBR
     per, pbr = fin.get("per", "—"), fin.get("pbr", "—")
     if per != "—" or pbr != "—":
         c1, c2 = st.columns(2)
         c1.metric("PER", per)
         c2.metric("PBR", pbr)
 
-    yf_sym = fin.get("yf_symbol", "")
-    crumb_ok = fin.get("crumb_ok", False)
-    if yf_sym:
-        st.caption(f"Yahoo Finance ({yf_sym})"  + (" · 인증 OK" if crumb_ok else ""))
+    # 추가 지표 (EPS, BPS, 배당률, 시총 — Naver 소스)
+    extras = fin.get("extras", [])
+    if extras:
+        df_ext = pd.DataFrame(extras).set_index("항목")
+        st.dataframe(df_ext, use_container_width=True)
+
+    # 분기 실적 테이블
+    quarters = fin.get("quarters", [])
+    if quarters:
+        st.markdown(
+            '<div style="font-size:11px;color:#aaa;margin:8px 0 4px;">'
+            '최근 분기 실적</div>',
+            unsafe_allow_html=True,
+        )
+        df_q = pd.DataFrame(quarters)
+        st.dataframe(df_q, hide_index=True, use_container_width=True)
+
+    source = fin.get("source", "")
+    if source:
+        st.caption(f"출처: {source}")
 
 
 def main():
