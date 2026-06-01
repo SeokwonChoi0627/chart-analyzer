@@ -573,17 +573,27 @@ def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
     if market == "KR":
         code = _resolve_kr_code(symbol)
 
+        # 코드가 여전히 한글이면 변환 실패 — 빈 코드 경고
+        if not code.isdigit():
+            all_errors.append(f"[코드변환] '{symbol}' → 코드 변환 실패, 6자리 코드로 입력하세요")
+            return {}, all_errors
+
+        session = requests.Session()
+        session.headers.update(_HEADERS_YF)
+
+        # 1차: Naver 모바일
         fin, err = _fetch_naver_mobile(code)
         if not fin:
             all_errors.append(f"[Naver 모바일] {err}")
+            # 2차: Naver 요약
             fin, err = _fetch_naver_summary(code)
             if not fin:
                 all_errors.append(f"[Naver 요약] {err}")
 
         if fin:
-            # 분기 실적 Yahoo v10 병행 시도
+            # Yahoo v10 분기 실적 병행 시도
             try:
-                session, crumb = _get_yf_session()
+                _, crumb = _get_yf_session()
                 for suffix in [".KS", ".KQ"]:
                     yf_fin, _ = _fetch_yahoo_v10(f"{code}{suffix}", session, crumb)
                     if yf_fin.get("quarters"):
@@ -594,12 +604,14 @@ def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
                 pass
             return fin, []
 
-        session, crumb = _get_yf_session()
+        # 3차: Yahoo v8 chart meta (인증 불필요 — 서버에서도 항상 동작)
         for suffix in [".KS", ".KQ"]:
-            fin, err = _fetch_yahoo_v10(f"{code}{suffix}", session, crumb)
+            fin, err = _fetch_yahoo_v8_meta(f"{code}{suffix}", session)
             if fin:
+                fin["source"] = f"Yahoo Finance (시세만, Naver 조회 실패)"
                 return fin, []
-            all_errors.append(f"[Yahoo v10 {code}{suffix}] {err}")
+            all_errors.append(f"[Yahoo v8 {code}{suffix}] {err}")
+
         return {}, all_errors
 
     # ── 미국 주식 ──────────────────────────────────────────────────────────────

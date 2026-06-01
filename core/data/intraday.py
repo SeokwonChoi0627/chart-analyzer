@@ -40,25 +40,14 @@ _YF_BASE_URLS = [
 # ── 한글 종목명 → 종목코드 변환 ──────────────────────────────────────────────
 
 def _resolve_kr_code(symbol: str) -> str:
-    """
-    한글 종목명(또는 부분명)을 6자리 종목코드로 변환.
-    이미 숫자 코드이거나 변환 실패 시 원본 반환.
-    """
+    """한글 종목명 → 6자리 코드. pykrx_kr 3단계 폴백(정적맵→Naver→FDR) 재사용."""
     if symbol.isdigit():
         return symbol
     try:
-        import FinanceDataReader as fdr
-        listing = fdr.StockListing("KRX")
-        # 정확히 일치
-        matched = listing[listing["Name"] == symbol]
-        if not matched.empty:
-            return str(matched.iloc[0]["Code"])
-        # 부분 일치 (가장 짧은 이름 우선)
-        matched = listing[listing["Name"].str.contains(symbol, na=False)]
-        if not matched.empty:
-            matched = matched.copy()
-            matched["_len"] = matched["Name"].str.len()
-            return str(matched.sort_values("_len").iloc[0]["Code"])
+        from .pykrx_kr import PykrxProvider
+        code = PykrxProvider._name_to_ticker(symbol)
+        if code:
+            return code
     except Exception:
         pass
     return symbol
