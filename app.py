@@ -101,8 +101,8 @@ def _kv_table(data: dict) -> None:
     st.dataframe(df, use_container_width=True)
 
 
-def _render_financials(symbol: str, market: str) -> None:
-    """사이드바 하단 — 종합 재무정보 표시."""
+def _render_financials(fin: dict, errors: list) -> None:
+    """사이드바 하단 — 종합 재무정보 표시. 외부에서 fetch한 데이터를 받음."""
     st.divider()
     st.markdown(
         '<div style="font-size:12px;font-weight:600;color:#aaa;'
@@ -110,9 +110,6 @@ def _render_financials(symbol: str, market: str) -> None:
         '재무 정보</div>',
         unsafe_allow_html=True,
     )
-
-    with st.spinner("재무 데이터 조회 중…"):
-        fin, errors = get_financials(symbol, market)
 
     if not fin:
         st.caption("재무 데이터를 불러올 수 없습니다.")
@@ -226,13 +223,14 @@ def main():
     analyzed_at = now.strftime("%Y-%m-%d %H:%M:%S")
     chart_title = symbol.strip()
 
-    # ── 사이드바 하단: 최근 실적 ──────────────────────────────────────────────
-    with st.sidebar:
-        _render_financials(symbol.strip(), market)
-
-    # ── 종목 헤더 (종목명 + 티커) ─────────────────────────────────────────────
-    fin_data, _ = get_financials(symbol.strip(), market)
+    # ── 재무 데이터 (한 번만 조회) ───────────────────────────────────────────
+    with st.spinner("재무 데이터 조회 중…"):
+        fin_data, fin_errors = get_financials(symbol.strip(), market)
     company_name = fin_data.get("company_name", "") if fin_data else ""
+
+    # ── 사이드바 하단: 재무 정보 ──────────────────────────────────────────────
+    with st.sidebar:
+        _render_financials(fin_data, fin_errors)
     ticker_upper = symbol.strip().upper()
     if company_name and company_name.upper() != ticker_upper:
         header_html = (
