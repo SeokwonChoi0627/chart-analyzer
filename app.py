@@ -16,7 +16,12 @@ from ui.panels import render_signal_card, render_reasons_table, render_intraday_
 
 load_dotenv()
 
-st.set_page_config(page_title="차트 분석기", page_icon="📈", layout="wide")
+st.set_page_config(
+    page_title="차트 분석기",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "data", "cache.db")
 PERIOD_DAYS = 190  # 6개월 고정
@@ -63,11 +68,14 @@ div[data-testid="stAlert"] {
     border-radius: 12px !important;
 }
 
-/* ── Streamlit 상단 툴바 숨김 ── */
+/* ── Streamlit 상단 툴바 + 사이드바 접기 버튼 숨김 ── */
 div[data-testid="stToolbar"],
 div[data-testid="stDecoration"],
 #MainMenu,
-header[data-testid="stHeader"] {
+header[data-testid="stHeader"],
+button[data-testid="collapsedControl"],
+div[data-testid="stSidebarCollapseButton"],
+section[data-testid="stSidebar"] button[kind="header"] {
     display: none !important;
     visibility: hidden !important;
 }
