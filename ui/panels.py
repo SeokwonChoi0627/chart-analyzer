@@ -210,15 +210,15 @@ def render_reasons_table(signal: dict) -> None:
 # 6. 매도 타점      #1565c0  (파랑)
 # 7. 강력 매도 타점  #0d3c7a  (진한 파랑)
 
+# (stage_id, label, accent, dot_color)
 _STAGES = [
-    # (stage_id, label, color, bg, border, badge)
-    ("strong_buy",   "강력 매수 타점",   "#c62828", "#fff5f5", "#ef9a9a", "#c62828"),
-    ("buy",          "매수 타점",        "#e53935", "#fff8f8", "#ffcdd2", "#e53935"),
-    ("up_trend",     "상승 추세 진행",   "#ef6c00", "#fff8f0", "#ffcc80", "#ef6c00"),
-    ("neutral",      "관망",             "#616161", "#f7f7f7", "#cfcfcf", "#757575"),
-    ("down_trend",   "하락 추세 진행",   "#3d7cc9", "#f0f5ff", "#90b8e8", "#3d7cc9"),
-    ("sell",         "매도 타점",        "#1565c0", "#f0f4ff", "#90aee8", "#1565c0"),
-    ("strong_sell",  "강력 매도 타점",   "#0d3c7a", "#eaf0ff", "#7ba3e0", "#0d3c7a"),
+    ("strong_buy",  "강력 매수 타점",  "#0a8a0a", "#0a8a0a"),
+    ("buy",         "매수 타점",       "#2e7d32", "#43a047"),
+    ("up_trend",    "상승 추세 진행",  "#66bb6a", "#66bb6a"),
+    ("neutral",     "관망",            "#9e9e9e", "#bdbdbd"),
+    ("down_trend",  "하락 추세 진행",  "#ef9a9a", "#ef9a9a"),
+    ("sell",        "매도 타점",       "#c62828", "#e53935"),
+    ("strong_sell", "강력 매도 타점",  "#7f0000", "#b71c1c"),
 ]
 _STAGE_MAP = {s[0]: s for s in _STAGES}
 
@@ -272,64 +272,100 @@ def _classify_stage(daily: float, intra: float) -> tuple[str, str]:
 
 def render_entry_point_card(daily_score: float, intraday_score: float,
                             fin: dict | None = None) -> None:
-    """다중 타임프레임 타점 카드 — 항상 표시."""
+    """다중 타임프레임 타점 카드 — Apple 디자인, 항상 표시."""
     stage_id, desc = _classify_stage(daily_score, intraday_score)
-    _, label, color, bg, border, badge = _STAGE_MAP[stage_id]
+    _, label, accent, _ = _STAGE_MAP[stage_id]
 
-    # 선행 PER < 후행 PER → 장기 유망 안내
+    stage_ids = [s[0] for s in _STAGES]
+    stage_idx = stage_ids.index(stage_id)
+
+    # ── 선행 PER 안내 ──────────────────────────────────────────────────────────
     per_row = ""
     if fin:
         val = fin.get("valuation") or {}
         try:
-            trailing = float(str(val.get("PER(후행)") or "").replace("배", "").strip() or "0")
-            forward  = float(str(val.get("PER(선행)") or "").replace("배", "").strip() or "0")
+            trailing = float(str(val.get("PER(후행)") or "").replace("배","").strip() or "0")
+            forward  = float(str(val.get("PER(선행)") or "").replace("배","").strip() or "0")
             if 0 < forward < trailing:
                 per_row = (
-                    f'<div style="margin-top:10px;padding:6px 12px;'
-                    f'background:rgba(21,101,192,0.07);border-radius:8px;'
-                    f'font-size:12px;color:#1565c0;line-height:1.5;">'
-                    f'장기 유망 지표: 선행PER {forward:.1f}배 &lt; 후행PER {trailing:.1f}배 '
-                    f'— 향후 이익 증가 기대</div>'
+                    f'<div style="display:flex;align-items:center;gap:8px;'
+                    f'margin-top:14px;padding:10px 14px;'
+                    f'background:#f0faf0;border-radius:11px;">'
+                    f'<span style="font-size:13px;font-weight:600;color:#2e7d32;'
+                    f'letter-spacing:-0.2px;">장기 유망</span>'
+                    f'<span style="font-size:13px;color:#444;letter-spacing:-0.374px;">'
+                    f'선행PER {forward:.1f}배 &lt; 후행PER {trailing:.1f}배 — 이익 증가 기대</span>'
+                    f'</div>'
                 )
         except (ValueError, AttributeError):
             pass
 
-    # 7단계 스펙트럼 바
-    colors_bar = ["#c62828","#e53935","#ef6c00","#bdbdbd","#5c8fd6","#1565c0","#0d3c7a"]
-    stage_idx  = [s[0] for s in _STAGES].index(stage_id)
-    dots = "".join(
-        f'<span style="display:inline-block;width:14px;height:14px;border-radius:50%;'
-        f'background:{colors_bar[i]};'
-        f'{"outline:3px solid #333;outline-offset:2px;" if i == stage_idx else "opacity:0.3;"}'
-        f'margin:0 3px;"></span>'
-        for i in range(7)
-    )
-    labels_bar = (
-        '<div style="display:flex;justify-content:space-between;'
-        'font-size:10px;color:#aaa;margin-top:4px;">'
-        '<span>강력 매수</span><span>관망</span><span>강력 매도</span></div>'
-    )
+    # ── 7단계 스펙트럼 도트 ────────────────────────────────────────────────────
+    dot_colors = [s[3] for s in _STAGES]
+    dots_html = ""
+    for i, dc in enumerate(dot_colors):
+        if i == stage_idx:
+            dots_html += (
+                f'<span style="display:inline-block;width:16px;height:16px;'
+                f'border-radius:50%;background:{dc};'
+                f'box-shadow:0 0 0 3px #fff,0 0 0 5px {dc};'
+                f'margin:0 5px;vertical-align:middle;"></span>'
+            )
+        else:
+            dots_html += (
+                f'<span style="display:inline-block;width:10px;height:10px;'
+                f'border-radius:50%;background:{dc};opacity:0.28;'
+                f'margin:0 5px;vertical-align:middle;"></span>'
+            )
 
-    desc_html = desc.replace("\n", "<br>")
+    desc_lines = desc.split("\n")
+    desc_main  = desc_lines[0] if desc_lines else desc
+    desc_sub   = desc_lines[1] if len(desc_lines) > 1 else ""
 
     st.markdown(
-        f'<div style="background:{bg};border:2px solid {border};border-radius:16px;'
-        f'padding:20px 24px;margin:20px 0;'
-        f'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">'
-        # 헤더
-        f'<div style="display:flex;align-items:center;justify-content:space-between;'
-        f'margin-bottom:12px;">'
-        f'<span style="font-size:11px;font-weight:700;color:#999;letter-spacing:0.8px;'
-        f'text-transform:uppercase;">복합 타점 분석</span>'
-        f'<span style="font-size:12px;font-weight:700;color:#fff;background:{badge};'
-        f'padding:3px 12px;border-radius:99px;">{label}</span>'
+        # 카드 컨테이너 — Apple store-utility-card
+        f'<div style="'
+        f'background:#ffffff;'
+        f'border:1px solid rgba(0,0,0,0.08);'
+        f'border-radius:18px;'
+        f'box-shadow:0 2px 12px rgba(0,0,0,0.06);'
+        f'padding:22px 26px 20px;'
+        f'margin:22px 0;'
+        f'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;">'
+
+        # 헤더 행
+        f'<div style="display:flex;align-items:center;'
+        f'justify-content:space-between;margin-bottom:16px;">'
+        f'<span style="font-size:11px;font-weight:600;color:#8e8e93;'
+        f'letter-spacing:0.6px;text-transform:uppercase;">복합 타점 분석</span>'
+        f'<span style="font-size:12px;font-weight:600;color:#ffffff;'
+        f'background:{accent};padding:4px 14px;border-radius:9999px;'
+        f'letter-spacing:-0.12px;">{label}</span>'
         f'</div>'
-        # 스펙트럼 바
-        f'<div style="text-align:center;margin-bottom:10px;">{dots}</div>'
-        f'{labels_bar}'
-        # 설명
-        f'<div style="margin-top:12px;font-size:13px;color:#333;line-height:1.7;">'
-        f'{desc_html}</div>'
+
+        # 스펙트럼 도트
+        f'<div style="display:flex;align-items:center;justify-content:center;'
+        f'margin-bottom:6px;">{dots_html}</div>'
+        f'<div style="display:flex;justify-content:space-between;'
+        f'font-size:10px;color:#c7c7cc;margin-bottom:16px;'
+        f'padding:0 4px;">'
+        f'<span style="color:#2e7d32;font-weight:600;">강력 매수</span>'
+        f'<span>관망</span>'
+        f'<span style="color:#c62828;font-weight:600;">강력 매도</span>'
+        f'</div>'
+
+        # 구분선
+        f'<div style="height:1px;background:rgba(0,0,0,0.06);margin-bottom:14px;"></div>'
+
+        # 설명 — Apple typography.body (17px / 400 / -0.374px)
+        f'<div style="font-size:15px;font-weight:600;color:#1d1d1f;'
+        f'letter-spacing:-0.374px;line-height:1.3;margin-bottom:5px;">'
+        f'{desc_main}</div>'
+        f'<div style="font-size:14px;font-weight:400;color:#636366;'
+        f'letter-spacing:-0.224px;line-height:1.5;">'
+        f'{desc_sub}</div>'
+
+        # PER 안내
         f'{per_row}'
         f'</div>',
         unsafe_allow_html=True,
