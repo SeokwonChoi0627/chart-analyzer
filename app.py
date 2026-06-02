@@ -57,6 +57,19 @@ section[data-testid="stSidebar"] * {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* ── PC: 사이드바 항상 표시 (서버 환경 collapsed 기본값 우회) ── */
+@media (min-width: 769px) {
+    section[data-testid="stSidebar"] {
+        transform: none !important;
+        min-width: 320px !important;
+        width: 320px !important;
+    }
+    /* 접기 버튼 숨김 (transform 고정이라 작동 안 함) */
+    div[data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
+}
+
 /* ── 메인 타이틀 ── */
 h1 {
     font-weight: 600 !important;
