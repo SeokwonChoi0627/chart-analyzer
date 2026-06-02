@@ -48,21 +48,23 @@ html, body, [class*="css"] {
     color: #1d1d1f;
 }
 
-/* ── 사이드바: 배경 + PC에서 항상 표시 ── */
+/* ── 사이드바: 배경 ── */
 section[data-testid="stSidebar"] {
     background-color: #f5f5f7 !important;
-    transform: none !important;
-    visibility: visible !important;
-    display: block !important;
 }
 section[data-testid="stSidebar"] * {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* ── 모바일에서는 사이드바 접기 허용 ── */
-@media (max-width: 768px) {
+/* ── PC: 사이드바 항상 펼침 고정 ── */
+@media (min-width: 769px) {
     section[data-testid="stSidebar"] {
-        transform: unset !important;
+        transform: none !important;
+        min-width: 260px !important;
+        width: 260px !important;
+    }
+    div[data-testid="stSidebarCollapseButton"] {
+        display: none !important;
     }
 }
 
