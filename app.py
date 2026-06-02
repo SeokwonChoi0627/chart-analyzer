@@ -39,6 +39,13 @@ def get_financials(symbol: str, market: str) -> tuple[dict, list]:
     return fetch_financials(symbol, market)
 
 
+_CHART_CONFIG = {
+    "scrollZoom": False,       # 스크롤 줌 비활성화
+    "doubleClick": False,      # 더블클릭 리셋 비활성화
+    "displayModeBar": False,   # 상단 툴바 숨김
+    "staticPlot": False,       # hover 툴팁은 유지
+}
+
 _CSS = """
 <style>
 /* ── 전체 폰트: SF Pro 대체 스택 ── */
@@ -415,7 +422,11 @@ def main():
         render_signal_card(signal, source, analyzed_at)
         render_reasons_table(signal)
     with col2:
-        st.plotly_chart(build_chart(enriched, chart_title), use_container_width=True)
+        st.plotly_chart(
+            build_chart(enriched, chart_title),
+            use_container_width=True,
+            config=_CHART_CONFIG,
+        )
 
     # ── 섹션 2: 15분봉 단기 분석 ─────────────────────────────────────────────
     st.divider()
@@ -455,6 +466,7 @@ def main():
             st.plotly_chart(
                 build_intraday_chart(enriched_15m, chart_title),
                 use_container_width=True,
+                config=_CHART_CONFIG,
             )
 
 

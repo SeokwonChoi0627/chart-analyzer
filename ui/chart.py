@@ -47,6 +47,7 @@ def build_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
     fig.update_layout(
         title=title, height=900, showlegend=True,
         xaxis_rangeslider_visible=False, margin=dict(t=60, b=20),
+        dragmode=False,
     )
     return fig
 
@@ -112,6 +113,7 @@ def build_intraday_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
         showlegend=False,
         xaxis_rangeslider_visible=False,
         margin=dict(t=50, b=40),
+        dragmode=False,
     )
     # 카테고리 축: 모든 x값은 고유 → 야간/주말 갭 없이 연속 표시
     # tickvals/ticktext로 날짜 경계만 레이블 표시
