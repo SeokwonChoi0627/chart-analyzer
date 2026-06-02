@@ -289,6 +289,26 @@ def main():
     kst_time = now.strftime("%H:%M")
     kst_date = now.strftime("%Y.%m.%d")
 
+    # ── 현재가 (마지막 종가) ──────────────────────────────────────────────────
+    last_close = enriched["close"].iloc[-1] if not enriched.empty else None
+    prev_close = enriched["close"].iloc[-2] if len(enriched) >= 2 else None
+    if last_close is not None:
+        if market == "KR":
+            price_str = f"{last_close:,.0f}원"
+        else:
+            price_str = f"${last_close:,.2f}"
+        if prev_close is not None:
+            chg = (last_close - prev_close) / prev_close * 100
+            chg_color = "#0a8a0a" if chg >= 0 else "#c62828"
+            chg_str = f"{chg:+.2f}%"
+        else:
+            chg_color = "#888"
+            chg_str = ""
+    else:
+        price_str = ""
+        chg_str   = ""
+        chg_color = "#888"
+
     if company_name and company_name.upper() != ticker_upper:
         name_block = (
             f'<div style="font-size:26px;font-weight:700;color:#1d1d1f;'
@@ -302,13 +322,25 @@ def main():
             f'letter-spacing:-0.5px;">{ticker_upper}</div>'
         )
 
+    price_block = (
+        f'<div style="text-align:right;margin-right:24px;">'
+        f'<div style="font-size:22px;font-weight:700;color:#1d1d1f;'
+        f'letter-spacing:-0.4px;">{price_str}</div>'
+        f'<div style="font-size:12px;font-weight:600;color:{chg_color};'
+        f'margin-top:2px;">{chg_str}</div>'
+        f'</div>'
+    ) if price_str else ""
+
     header_html = (
         f'<div class="sticky-header" style="display:flex;justify-content:space-between;'
-        f'align-items:flex-start;font-family:system-ui,-apple-system,sans-serif;">'
+        f'align-items:center;font-family:system-ui,-apple-system,sans-serif;">'
         f'<div>{name_block}</div>'
+        f'<div style="display:flex;align-items:center;">'
+        f'{price_block}'
         f'<div style="text-align:right;">'
         f'<div style="font-size:22px;font-weight:600;color:#1d1d1f;letter-spacing:-0.3px;">{kst_time}</div>'
         f'<div style="font-size:11px;color:#aaa;margin-top:2px;">KST &nbsp;{kst_date}</div>'
+        f'</div>'
         f'</div>'
         f'</div>'
     )
