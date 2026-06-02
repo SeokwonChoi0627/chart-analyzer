@@ -65,70 +65,95 @@ section[data-testid="stSidebar"] * {
     }
 }
 
-/* ── 사이드바 접기/펼치기 버튼 스타일 ── */
-div[data-testid="stSidebarCollapseButton"] button,
-button[data-testid="collapsedControl"] {
+/* ── 사이드바 접기 버튼 (사이드바 내부) ── */
+div[data-testid="stSidebarCollapseButton"] {
+    position: absolute !important;
+    top: 16px !important;
+    right: -18px !important;
+    z-index: 1000 !important;
+}
+div[data-testid="stSidebarCollapseButton"] button {
     font-size: 0 !important;
     color: transparent !important;
     background: #ffffff !important;
-    border: 1px solid #d1d1d6 !important;
+    border: 1.5px solid #c8c8d0 !important;
     border-radius: 50% !important;
-    width: 28px !important;
-    height: 28px !important;
+    width: 36px !important;
+    height: 36px !important;
     padding: 0 !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.12) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
     cursor: pointer !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     overflow: hidden !important;
+    transition: background 0.15s, box-shadow 0.15s !important;
+}
+div[data-testid="stSidebarCollapseButton"] button::after {
+    content: "" !important;
+    display: block !important;
+    width: 10px !important;
+    height: 10px !important;
+    border-top: 2px solid #555 !important;
+    border-left: 2px solid #555 !important;
+    transform: rotate(-45deg) translateX(2px) !important;
+}
+div[data-testid="stSidebarCollapseButton"] button:hover {
+    background: #f0f0f5 !important;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.2) !important;
 }
 
-/* 버튼 내부 span(아이콘 텍스트) 완전 제거 */
-div[data-testid="stSidebarCollapseButton"] button span,
-button[data-testid="collapsedControl"] span,
-div[data-testid="stSidebarCollapseButton"] button svg,
-button[data-testid="collapsedControl"] svg,
-div[data-testid="stSidebarCollapseButton"] button p,
-button[data-testid="collapsedControl"] p {
-    display: none !important;
-    visibility: hidden !important;
-    width: 0 !important;
-    height: 0 !important;
-    overflow: hidden !important;
+/* ── 사이드바 열기 버튼 (사이드바 접혔을 때) ── */
+button[data-testid="collapsedControl"] {
     font-size: 0 !important;
     color: transparent !important;
-}
-
-/* 화살표 기호만 CSS로 표시 */
-div[data-testid="stSidebarCollapseButton"] button::after {
-    content: "‹" !important;
-    font-size: 18px !important;
-    color: #555 !important;
-    line-height: 1 !important;
-    display: block !important;
+    background: #ffffff !important;
+    border: 1.5px solid #c8c8d0 !important;
+    border-radius: 50% !important;
+    width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18) !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    margin-top: 16px !important;
+    margin-left: 12px !important;
+    transition: background 0.15s, box-shadow 0.15s !important;
 }
 button[data-testid="collapsedControl"]::after {
-    content: "›" !important;
-    font-size: 18px !important;
-    color: #555 !important;
-    line-height: 1 !important;
+    content: "" !important;
     display: block !important;
+    width: 10px !important;
+    height: 10px !important;
+    border-top: 2px solid #333 !important;
+    border-right: 2px solid #333 !important;
+    transform: rotate(45deg) translateX(-2px) !important;
 }
-div[data-testid="stSidebarCollapseButton"] button:hover,
 button[data-testid="collapsedControl"]:hover {
     background: #f0f0f5 !important;
-    border-color: #aaa !important;
+    box-shadow: 0 3px 14px rgba(0,0,0,0.22) !important;
 }
 
-/* Streamlit 툴팁 팝업 숨김 */
+/* 버튼 내부 원본 아이콘/텍스트 제거 */
+div[data-testid="stSidebarCollapseButton"] button span,
+div[data-testid="stSidebarCollapseButton"] button svg,
+div[data-testid="stSidebarCollapseButton"] button p,
+button[data-testid="collapsedControl"] span,
+button[data-testid="collapsedControl"] svg,
+button[data-testid="collapsedControl"] p {
+    display: none !important;
+}
+
+/* 툴팁 완전 숨김 */
 div[data-testid="stTooltipContent"],
-div[class*="tooltip"],
 div[data-baseweb="tooltip"],
 [role="tooltip"] {
     display: none !important;
-    visibility: hidden !important;
     opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 /* ── 메인 타이틀 ── */
