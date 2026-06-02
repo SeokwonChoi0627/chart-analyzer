@@ -243,8 +243,33 @@ def _render_financials(fin: dict, errors: list) -> None:
         st.caption(f"출처: {source}")
 
 
+_JS = """
+<script>
+(function removeCollapseTooltips() {
+    function clean() {
+        var sels = [
+            '[data-testid="stSidebarCollapseButton"] button',
+            '[data-testid="collapsedControl"]'
+        ];
+        sels.forEach(function(sel) {
+            document.querySelectorAll(sel).forEach(function(btn) {
+                btn.removeAttribute('title');
+                btn.removeAttribute('aria-label');
+                var span = btn.querySelector('span');
+                if (span) span.style.display = 'none';
+            });
+        });
+    }
+    clean();
+    new MutationObserver(clean).observe(document.body, {childList: true, subtree: true});
+})();
+</script>
+"""
+
+
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
+    st.markdown(_JS, unsafe_allow_html=True)
 
     from datetime import timezone, timedelta
     KST = timezone(timedelta(hours=9))
