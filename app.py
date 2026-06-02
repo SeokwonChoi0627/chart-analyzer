@@ -72,15 +72,50 @@ section[data-testid="stSidebar"] * {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* ── PC: 사이드바 항상 표시 (서버 환경 collapsed 기본값 우회) ── */
+/* ── PC: 사이드바 항상 표시 ── */
 @media (min-width: 769px) {
     section[data-testid="stSidebar"] {
         transform: none !important;
         min-width: 320px !important;
         width: 320px !important;
     }
-    /* 접기 버튼 숨김 (transform 고정이라 작동 안 함) */
     div[data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
+}
+
+/* ── 모바일: sticky 헤더 left 0, 열기 버튼 크게 ── */
+@media (max-width: 768px) {
+    .sticky-header {
+        left: 0 !important;
+    }
+    /* 사이드바 닫혔을 때 열기 버튼 — 크고 눈에 띄게 */
+    button[data-testid="collapsedControl"] {
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 1000 !important;
+        width: 44px !important;
+        height: 44px !important;
+        background: #1d1d1f !important;
+        border: none !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow: hidden !important;
+        font-size: 0 !important;
+        color: transparent !important;
+    }
+    button[data-testid="collapsedControl"]::after {
+        content: "☰" !important;
+        font-size: 20px !important;
+        color: #ffffff !important;
+        line-height: 1 !important;
+        display: block !important;
+    }
+    button[data-testid="collapsedControl"] > * {
         display: none !important;
     }
 }
