@@ -12,7 +12,7 @@ from core.data.base import detect_market
 from core.indicators import compute_all
 from core.signals import generate_signal, generate_intraday_signal
 from ui.chart import build_chart, build_intraday_chart
-from ui.panels import render_signal_card, render_reasons_table, render_intraday_panel
+from ui.panels import render_signal_card, render_reasons_table, render_intraday_panel, render_entry_point_card
 
 load_dotenv()
 
@@ -351,6 +351,13 @@ def main():
                 build_intraday_chart(enriched_15m, chart_title),
                 use_container_width=True,
             )
+
+        # ── 타점 포착 카드 ────────────────────────────────────────────────────
+        render_entry_point_card(
+            daily_score=signal["score"],
+            intraday_score=signal_15m.get("score", 0.0),
+            fin=fin_data,
+        )
 
 
 if __name__ == "__main__":

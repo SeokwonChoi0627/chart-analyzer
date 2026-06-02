@@ -197,3 +197,93 @@ def render_reasons_table(signal: dict) -> None:
     })
     table["점수"] = table["점수"].map(lambda v: f"{v:+.1f}")
     st.dataframe(table, hide_index=True, use_container_width=True)
+
+
+# ── 타점 포착 카드 ────────────────────────────────────────────────────────────
+
+def detect_entry_point(daily_score: float, intraday_score: float,
+                       fin: dict | None = None) -> dict:
+    """
+    일봉 + 15분봉 복합 신호로 타점 유형 판단.
+
+    매수 타점: 일봉 상승추세(≥+2) + 15분봉 단기 하락(≤-0.5)
+    매도 타점: 일봉 하락추세(≤-2) + 15분봉 단기 반등(≥+0.5)
+    관망: 조건 미충족
+    """
+    # 선행 PER < 후행 PER → 장기 유망 가산점
+    per_bonus = ""
+    if fin:
+        val = fin.get("valuation") or {}
+        try:
+            trailing = float(str(val.get("PER(후행)") or "").replace("배", "").strip() or "0")
+            forward  = float(str(val.get("PER(선행)") or "").replace("배", "").strip() or "0")
+            if 0 < forward < trailing:
+                per_bonus = f"선행PER({forward:.1f}) < 후행PER({trailing:.1f}) — 이익 증가 기대"
+        except (ValueError, AttributeError):
+            pass
+
+    if daily_score >= 2.0 and intraday_score <= -0.5:
+        strength = "강력" if daily_score >= 5.0 and intraday_score <= -1.5 else "일반"
+        return {
+            "type": "buy",
+            "label": "매수 타점 포착" if strength == "일반" else "강력 매수 타점",
+            "desc": f"일봉 상승추세(+{daily_score:.1f}) + 15분봉 단기 조정({intraday_score:+.1f}) — 눌림목 매수 구간",
+            "color": "#0a8a0a" if strength == "강력" else "#2e7d32",
+            "bg": "#f0faf0",
+            "border": "#a5d6a7",
+            "icon": "📈",
+            "per_bonus": per_bonus,
+        }
+    if daily_score <= -2.0 and intraday_score >= 0.5:
+        strength = "강력" if daily_score <= -5.0 and intraday_score >= 1.5 else "일반"
+        return {
+            "type": "sell",
+            "label": "매도 타점 포착" if strength == "일반" else "강력 매도 타점",
+            "desc": f"일봉 하락추세({daily_score:.1f}) + 15분봉 단기 반등({intraday_score:+.1f}) — 반등 매도 구간",
+            "color": "#c62828" if strength == "강력" else "#d84315",
+            "bg": "#fff5f5",
+            "border": "#ef9a9a",
+            "icon": "📉",
+            "per_bonus": "",
+        }
+    return {"type": "none"}
+
+
+def render_entry_point_card(daily_score: float, intraday_score: float,
+                            fin: dict | None = None) -> None:
+    """타점 포착 결과 카드 렌더링."""
+    ep = detect_entry_point(daily_score, intraday_score, fin)
+    if ep["type"] == "none":
+        return
+
+    color  = ep["color"]
+    bg     = ep["bg"]
+    border = ep["border"]
+    icon   = ep["icon"]
+    label  = ep["label"]
+    desc   = ep["desc"]
+    per_b  = ep.get("per_bonus", "")
+
+    per_row = (
+        f'<div style="margin-top:8px;padding:6px 10px;background:rgba(0,100,200,0.06);'
+        f'border-radius:8px;font-size:12px;color:#0055aa;">'
+        f'💡 {per_b}</div>'
+        if per_b else ""
+    )
+
+    st.markdown(
+        f'<div style="background:{bg};border:2px solid {border};border-radius:16px;'
+        f'padding:18px 22px;margin:16px 0;'
+        f'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">'
+        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+        f'<span style="font-size:20px;">{icon}</span>'
+        f'<span style="font-size:15px;font-weight:700;color:{color};'
+        f'letter-spacing:-0.2px;">{label}</span>'
+        f'<span style="margin-left:auto;font-size:11px;font-weight:600;color:#fff;'
+        f'background:{color};padding:2px 8px;border-radius:99px;">신호 감지</span>'
+        f'</div>'
+        f'<div style="font-size:13px;color:#444;line-height:1.5;">{desc}</div>'
+        f'{per_row}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
