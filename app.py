@@ -48,55 +48,13 @@ html, body, [class*="css"] {
     color: #1d1d1f;
 }
 
-/* ── 사이드바: 배경 + 우측 테두리로 구분 ── */
+/* ── 사이드바: 배경 + 우측 테두리 ── */
 section[data-testid="stSidebar"] {
     background-color: #ebebf0 !important;
     border-right: 1px solid #d1d1d6 !important;
 }
 section[data-testid="stSidebar"] * {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-/* ── PC: 사이드바 너비 확장 ── */
-@media (min-width: 769px) {
-    section[data-testid="stSidebar"] {
-        min-width: 320px !important;
-        width: 320px !important;
-    }
-}
-
-/* ── 사이드바 접기/열기 버튼 ── */
-div[data-testid="stSidebarCollapseButton"] button,
-button[data-testid="collapsedControl"] {
-    background: #ffffff !important;
-    border: 1.5px solid #c8c8d0 !important;
-    border-radius: 50% !important;
-    width: 32px !important;
-    height: 32px !important;
-    padding: 0 !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.14) !important;
-    overflow: hidden !important;
-    transition: box-shadow 0.15s, background 0.15s !important;
-}
-div[data-testid="stSidebarCollapseButton"] button:hover,
-button[data-testid="collapsedControl"]:hover {
-    box-shadow: 0 3px 12px rgba(0,0,0,0.22) !important;
-    background: #f5f5f7 !important;
-}
-div[data-testid="stSidebarCollapseButton"] button > *,
-button[data-testid="collapsedControl"] > * {
-    opacity: 0 !important;
-    font-size: 0 !important;
-    color: transparent !important;
-}
-
-/* 툴팁 숨김 */
-div[data-testid="stTooltipContent"],
-div[data-baseweb="tooltip"],
-[role="tooltip"] {
-    display: none !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
 }
 
 /* ── 메인 타이틀 ── */
@@ -241,39 +199,8 @@ def _render_financials(fin: dict, errors: list) -> None:
         st.caption(f"출처: {source}")
 
 
-_JS = """
-<script>
-(function removeCollapseTooltips() {
-    function clean() {
-        var sels = [
-            '[data-testid="stSidebarCollapseButton"] button',
-            '[data-testid="collapsedControl"]'
-        ];
-        sels.forEach(function(sel) {
-            document.querySelectorAll(sel).forEach(function(btn) {
-                btn.removeAttribute('title');
-                btn.removeAttribute('aria-label');
-                btn.removeAttribute('aria-describedby');
-                btn.querySelectorAll('span, p, svg').forEach(function(el) {
-                    el.style.cssText = 'display:none!important;visibility:hidden!important;font-size:0!important;width:0!important;height:0!important;';
-                });
-            });
-        });
-        /* 툴팁 div 제거 */
-        document.querySelectorAll('[data-baseweb="tooltip"],[role="tooltip"],[data-testid="stTooltipContent"]').forEach(function(el) {
-            el.remove();
-        });
-    }
-    clean();
-    new MutationObserver(clean).observe(document.body, {childList: true, subtree: true});
-})();
-</script>
-"""
-
-
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
-    st.markdown(_JS, unsafe_allow_html=True)
 
     from datetime import timezone, timedelta
     KST = timezone(timedelta(hours=9))
