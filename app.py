@@ -39,6 +39,27 @@ def get_financials(symbol: str, market: str) -> tuple[dict, list]:
     return fetch_financials(symbol, market)
 
 
+_MOBILE_FORM_JS = """
+<script>
+(function() {
+    function applyMobileForm() {
+        var main = document.querySelector('[data-testid="stMainBlockContainer"]');
+        if (!main) return;
+        var form = main.querySelector('[data-testid="stForm"]');
+        if (!form) return;
+        if (window.innerWidth >= 769) {
+            form.style.setProperty('display', 'none', 'important');
+        } else {
+            form.style.removeProperty('display');
+        }
+    }
+    setTimeout(applyMobileForm, 400);
+    setInterval(applyMobileForm, 800);
+    window.addEventListener('resize', applyMobileForm);
+})();
+</script>
+"""
+
 _CHART_CONFIG = {
     "scrollZoom": False,       # 스크롤 줌 비활성화
     "doubleClick": False,      # 더블클릭 리셋 비활성화
@@ -265,6 +286,7 @@ def _render_financials(fin: dict, errors: list) -> None:
 
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
+    st.markdown(_MOBILE_FORM_JS, unsafe_allow_html=True)
 
     from datetime import timezone, timedelta
     KST = timezone(timedelta(hours=9))
