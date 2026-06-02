@@ -20,6 +20,7 @@ st.set_page_config(
     page_title="차트 분석기",
     page_icon="📈",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "data", "cache.db")
