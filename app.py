@@ -48,12 +48,22 @@ html, body, [class*="css"] {
     color: #1d1d1f;
 }
 
-/* ── 사이드바: Apple parchment 배경 ── */
+/* ── 사이드바: 배경 + PC에서 항상 표시 ── */
 section[data-testid="stSidebar"] {
     background-color: #f5f5f7 !important;
+    transform: none !important;
+    visibility: visible !important;
+    display: block !important;
 }
 section[data-testid="stSidebar"] * {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── 모바일에서는 사이드바 접기 허용 ── */
+@media (max-width: 768px) {
+    section[data-testid="stSidebar"] {
+        transform: unset !important;
+    }
 }
 
 /* ── 메인 타이틀 ── */
