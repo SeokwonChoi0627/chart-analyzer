@@ -200,89 +200,136 @@ def render_reasons_table(signal: dict) -> None:
 
 
 # ── 타점 포착 카드 ────────────────────────────────────────────────────────────
+#
+# 7단계 색상 스펙트럼 (빨강=매수, 파랑=매도)
+# 1. 강력 매수 타점  #c62828  (진한 빨강)
+# 2. 매수 타점      #e53935  (빨강)
+# 3. 상승 추세 진행  #ef6c00  (주황)
+# 4. 관망           #757575  (회색)
+# 5. 하락 추세 진행  #5c8fd6  (연한 파랑)
+# 6. 매도 타점      #1565c0  (파랑)
+# 7. 강력 매도 타점  #0d3c7a  (진한 파랑)
 
-def detect_entry_point(daily_score: float, intraday_score: float,
-                       fin: dict | None = None) -> dict:
-    """
-    일봉 + 15분봉 복합 신호로 타점 유형 판단.
+_STAGES = [
+    # (stage_id, label, color, bg, border, badge)
+    ("strong_buy",   "강력 매수 타점",   "#c62828", "#fff5f5", "#ef9a9a", "#c62828"),
+    ("buy",          "매수 타점",        "#e53935", "#fff8f8", "#ffcdd2", "#e53935"),
+    ("up_trend",     "상승 추세 진행",   "#ef6c00", "#fff8f0", "#ffcc80", "#ef6c00"),
+    ("neutral",      "관망",             "#616161", "#f7f7f7", "#cfcfcf", "#757575"),
+    ("down_trend",   "하락 추세 진행",   "#3d7cc9", "#f0f5ff", "#90b8e8", "#3d7cc9"),
+    ("sell",         "매도 타점",        "#1565c0", "#f0f4ff", "#90aee8", "#1565c0"),
+    ("strong_sell",  "강력 매도 타점",   "#0d3c7a", "#eaf0ff", "#7ba3e0", "#0d3c7a"),
+]
+_STAGE_MAP = {s[0]: s for s in _STAGES}
 
-    매수 타점: 일봉 상승추세(≥+2) + 15분봉 단기 하락(≤-0.5)
-    매도 타점: 일봉 하락추세(≤-2) + 15분봉 단기 반등(≥+0.5)
-    관망: 조건 미충족
-    """
-    # 선행 PER < 후행 PER → 장기 유망 가산점
-    per_bonus = ""
+
+def _classify_stage(daily: float, intra: float) -> tuple[str, str]:
+    """(stage_id, desc) 반환."""
+    d_up   = daily >= 2.0
+    d_sup  = daily >= 5.0
+    d_dn   = daily <= -2.0
+    d_sdn  = daily <= -5.0
+    i_dn   = intra <= -0.5
+    i_sdn  = intra <= -1.5
+    i_up   = intra >= 0.5
+    i_sup  = intra >= 1.5
+
+    if d_sup and i_sdn:
+        return "strong_buy", (
+            f"일봉 강한 상승({daily:+.1f}) + 15분봉 급락({intra:+.1f})\n"
+            f"강력한 눌림목 — 최적 매수 타이밍"
+        )
+    if d_up and i_dn:
+        return "buy", (
+            f"일봉 상승추세({daily:+.1f}) + 15분봉 단기 하락({intra:+.1f})\n"
+            f"눌림목 매수 구간 — 분할 매수 고려"
+        )
+    if d_up and not i_dn:
+        return "up_trend", (
+            f"일봉 상승추세({daily:+.1f}) + 15분봉 동반 상승({intra:+.1f})\n"
+            f"추세 진행 중 — 추격 매수 주의, 눌림목 대기"
+        )
+    if d_sdn and i_sup:
+        return "strong_sell", (
+            f"일봉 강한 하락({daily:+.1f}) + 15분봉 급반등({intra:+.1f})\n"
+            f"강력한 반등 매도 — 최적 매도 타이밍"
+        )
+    if d_dn and i_up:
+        return "sell", (
+            f"일봉 하락추세({daily:+.1f}) + 15분봉 단기 반등({intra:+.1f})\n"
+            f"반등 매도 구간 — 분할 매도 고려"
+        )
+    if d_dn and not i_up:
+        return "down_trend", (
+            f"일봉 하락추세({daily:+.1f}) + 15분봉 동반 하락({intra:+.1f})\n"
+            f"하락 추세 지속 — 신규 매수 금지, 관망"
+        )
+    return "neutral", (
+        f"일봉 중립({daily:+.1f}) / 15분봉 {intra:+.1f}\n"
+        f"뚜렷한 추세 없음 — 방향 확인 후 진입"
+    )
+
+
+def render_entry_point_card(daily_score: float, intraday_score: float,
+                            fin: dict | None = None) -> None:
+    """다중 타임프레임 타점 카드 — 항상 표시."""
+    stage_id, desc = _classify_stage(daily_score, intraday_score)
+    _, label, color, bg, border, badge = _STAGE_MAP[stage_id]
+
+    # 선행 PER < 후행 PER → 장기 유망 안내
+    per_row = ""
     if fin:
         val = fin.get("valuation") or {}
         try:
             trailing = float(str(val.get("PER(후행)") or "").replace("배", "").strip() or "0")
             forward  = float(str(val.get("PER(선행)") or "").replace("배", "").strip() or "0")
             if 0 < forward < trailing:
-                per_bonus = f"선행PER({forward:.1f}) < 후행PER({trailing:.1f}) — 이익 증가 기대"
+                per_row = (
+                    f'<div style="margin-top:10px;padding:6px 12px;'
+                    f'background:rgba(21,101,192,0.07);border-radius:8px;'
+                    f'font-size:12px;color:#1565c0;line-height:1.5;">'
+                    f'장기 유망 지표: 선행PER {forward:.1f}배 &lt; 후행PER {trailing:.1f}배 '
+                    f'— 향후 이익 증가 기대</div>'
+                )
         except (ValueError, AttributeError):
             pass
 
-    if daily_score >= 2.0 and intraday_score <= -0.5:
-        strength = "강력" if daily_score >= 5.0 and intraday_score <= -1.5 else "일반"
-        return {
-            "type": "buy",
-            "label": "매수 타점 포착" if strength == "일반" else "강력 매수 타점",
-            "desc": f"일봉 상승추세(+{daily_score:.1f}) + 15분봉 단기 조정({intraday_score:+.1f}) — 눌림목 매수 구간",
-            "color": "#0a8a0a" if strength == "강력" else "#2e7d32",
-            "bg": "#f0faf0",
-            "border": "#a5d6a7",
-            "icon": "📈",
-            "per_bonus": per_bonus,
-        }
-    if daily_score <= -2.0 and intraday_score >= 0.5:
-        strength = "강력" if daily_score <= -5.0 and intraday_score >= 1.5 else "일반"
-        return {
-            "type": "sell",
-            "label": "매도 타점 포착" if strength == "일반" else "강력 매도 타점",
-            "desc": f"일봉 하락추세({daily_score:.1f}) + 15분봉 단기 반등({intraday_score:+.1f}) — 반등 매도 구간",
-            "color": "#c62828" if strength == "강력" else "#d84315",
-            "bg": "#fff5f5",
-            "border": "#ef9a9a",
-            "icon": "📉",
-            "per_bonus": "",
-        }
-    return {"type": "none"}
-
-
-def render_entry_point_card(daily_score: float, intraday_score: float,
-                            fin: dict | None = None) -> None:
-    """타점 포착 결과 카드 렌더링."""
-    ep = detect_entry_point(daily_score, intraday_score, fin)
-    if ep["type"] == "none":
-        return
-
-    color  = ep["color"]
-    bg     = ep["bg"]
-    border = ep["border"]
-    icon   = ep["icon"]
-    label  = ep["label"]
-    desc   = ep["desc"]
-    per_b  = ep.get("per_bonus", "")
-
-    per_row = (
-        f'<div style="margin-top:8px;padding:6px 10px;background:rgba(0,100,200,0.06);'
-        f'border-radius:8px;font-size:12px;color:#0055aa;">'
-        f'💡 {per_b}</div>'
-        if per_b else ""
+    # 7단계 스펙트럼 바
+    colors_bar = ["#c62828","#e53935","#ef6c00","#bdbdbd","#5c8fd6","#1565c0","#0d3c7a"]
+    stage_idx  = [s[0] for s in _STAGES].index(stage_id)
+    dots = "".join(
+        f'<span style="display:inline-block;width:14px;height:14px;border-radius:50%;'
+        f'background:{colors_bar[i]};'
+        f'{"outline:3px solid #333;outline-offset:2px;" if i == stage_idx else "opacity:0.3;"}'
+        f'margin:0 3px;"></span>'
+        for i in range(7)
     )
+    labels_bar = (
+        '<div style="display:flex;justify-content:space-between;'
+        'font-size:10px;color:#aaa;margin-top:4px;">'
+        '<span>강력 매수</span><span>관망</span><span>강력 매도</span></div>'
+    )
+
+    desc_html = desc.replace("\n", "<br>")
 
     st.markdown(
         f'<div style="background:{bg};border:2px solid {border};border-radius:16px;'
-        f'padding:18px 22px;margin:16px 0;'
+        f'padding:20px 24px;margin:20px 0;'
         f'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">'
-        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-        f'<span style="font-size:20px;">{icon}</span>'
-        f'<span style="font-size:15px;font-weight:700;color:{color};'
-        f'letter-spacing:-0.2px;">{label}</span>'
-        f'<span style="margin-left:auto;font-size:11px;font-weight:600;color:#fff;'
-        f'background:{color};padding:2px 8px;border-radius:99px;">신호 감지</span>'
+        # 헤더
+        f'<div style="display:flex;align-items:center;justify-content:space-between;'
+        f'margin-bottom:12px;">'
+        f'<span style="font-size:11px;font-weight:700;color:#999;letter-spacing:0.8px;'
+        f'text-transform:uppercase;">복합 타점 분석</span>'
+        f'<span style="font-size:12px;font-weight:700;color:#fff;background:{badge};'
+        f'padding:3px 12px;border-radius:99px;">{label}</span>'
         f'</div>'
-        f'<div style="font-size:13px;color:#444;line-height:1.5;">{desc}</div>'
+        # 스펙트럼 바
+        f'<div style="text-align:center;margin-bottom:10px;">{dots}</div>'
+        f'{labels_bar}'
+        # 설명
+        f'<div style="margin-top:12px;font-size:13px;color:#333;line-height:1.7;">'
+        f'{desc_html}</div>'
         f'{per_row}'
         f'</div>',
         unsafe_allow_html=True,
