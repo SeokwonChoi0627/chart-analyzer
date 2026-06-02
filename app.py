@@ -299,6 +299,23 @@ def main():
     )
     st.markdown(header_html, unsafe_allow_html=True)
 
+    # ── 15분봉 데이터 미리 조회 (타점 카드를 최상단에 표시하기 위해) ──────────
+    with st.spinner("데이터 조회 중…"):
+        df_15m, err_15m = fetch_15min(symbol.strip(), market, days=5)
+
+    enriched_15m = None
+    signal_15m   = {"score": 0.0, "verdict": "데이터 부족", "reasons": [], "last_time": ""}
+    if not df_15m.empty:
+        enriched_15m = compute_all(df_15m)
+        signal_15m   = generate_intraday_signal(enriched_15m)
+
+    # ── 복합 타점 카드 (최상단) ───────────────────────────────────────────────
+    render_entry_point_card(
+        daily_score=signal["score"],
+        intraday_score=signal_15m.get("score", 0.0),
+        fin=fin_data,
+    )
+
     # ── 섹션 1: 일봉 분석 ────────────────────────────────────────────────────
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -313,12 +330,9 @@ def main():
         '<div style="font-size:16px;font-weight:600;color:#1d1d1f;'
         'letter-spacing:-0.2px;margin-bottom:12px;'
         'font-family:system-ui,-apple-system,sans-serif;">'
-        '📊 15분봉 단기 분석</div>',
+        '15분봉 단기 분석</div>',
         unsafe_allow_html=True,
     )
-
-    with st.spinner("15분봉 데이터 조회 중…"):
-        df_15m, err_15m = fetch_15min(symbol.strip(), market, days=5)
 
     col3, col4 = st.columns([1, 2])
 
@@ -332,18 +346,16 @@ def main():
                 'letter-spacing:0.6px;text-transform:uppercase;margin-bottom:6px;">'
                 '15분봉 단기 신호</div>'
                 '<div style="font-size:13px;color:#bbb;">'
-                '⚠️ 15분봉 데이터를 가져올 수 없습니다'
+                '15분봉 데이터를 가져올 수 없습니다'
                 '</div></div>',
                 unsafe_allow_html=True,
             )
         with col4:
             st.warning("15분봉 데이터를 불러오지 못했습니다.")
             if err_15m:
-                with st.expander("🔍 오류 상세 (진단용)", expanded=False):
+                with st.expander("오류 상세", expanded=False):
                     st.code(err_15m, language=None)
     else:
-        enriched_15m = compute_all(df_15m)
-        signal_15m   = generate_intraday_signal(enriched_15m)
         with col3:
             render_intraday_panel(signal_15m)
         with col4:
@@ -351,13 +363,6 @@ def main():
                 build_intraday_chart(enriched_15m, chart_title),
                 use_container_width=True,
             )
-
-        # ── 타점 포착 카드 ────────────────────────────────────────────────────
-        render_entry_point_card(
-            daily_score=signal["score"],
-            intraday_score=signal_15m.get("score", 0.0),
-            fin=fin_data,
-        )
 
 
 if __name__ == "__main__":

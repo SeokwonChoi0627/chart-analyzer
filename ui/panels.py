@@ -346,13 +346,7 @@ def render_entry_point_card(daily_score: float, intraday_score: float,
         # 스펙트럼 도트
         f'<div style="display:flex;align-items:center;justify-content:center;'
         f'margin-bottom:6px;">{dots_html}</div>'
-        f'<div style="display:flex;justify-content:space-between;'
-        f'font-size:10px;color:#c7c7cc;margin-bottom:16px;'
-        f'padding:0 4px;">'
-        f'<span style="color:#2e7d32;font-weight:600;">강력 매수</span>'
-        f'<span>관망</span>'
-        f'<span style="color:#c62828;font-weight:600;">강력 매도</span>'
-        f'</div>'
+        f'<div style="margin-bottom:16px;"></div>'
 
         # 구분선
         f'<div style="height:1px;background:rgba(0,0,0,0.06);margin-bottom:14px;"></div>'
