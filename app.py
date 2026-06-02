@@ -48,6 +48,21 @@ html, body, [class*="css"] {
     color: #1d1d1f;
 }
 
+/* ── 종목명+시각 헤더 fixed 고정 ── */
+.sticky-header {
+    position: fixed;
+    top: 0;
+    left: 320px;
+    right: 0;
+    z-index: 999;
+    background: #ffffff;
+    padding: 10px 2rem 8px;
+    border-bottom: 1px solid #e5e5ea;
+}
+div[data-testid="stMainBlockContainer"] {
+    padding-top: 68px !important;
+}
+
 /* ── 사이드바: 배경 + 우측 테두리 ── */
 section[data-testid="stSidebar"] {
     background-color: #ebebf0 !important;
