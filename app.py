@@ -236,53 +236,81 @@ def _render_financials(fin: dict, errors: list) -> None:
 _SIDEBAR_JS = """
 <script>
 (function() {
-    // 커스텀 플로팅 사이드바 열기 버튼 생성
-    function injectToggleBtn() {
-        if (document.getElementById('__sb_toggle__')) return;
-        var btn = document.createElement('button');
-        btn.id = '__sb_toggle__';
-        btn.innerHTML = '&#9776;';
-        btn.style.cssText = [
-            'position:fixed', 'top:14px', 'left:14px', 'z-index:99999',
-            'width:44px', 'height:44px', 'border-radius:12px',
-            'background:#1d1d1f', 'color:#fff', 'border:none',
-            'font-size:20px', 'cursor:pointer', 'display:none',
-            'align-items:center', 'justify-content:center',
-            'box-shadow:0 2px 12px rgba(0,0,0,0.3)',
-            'transition:opacity 0.2s'
-        ].join('!important;') + '!important';
-        btn.onclick = function() {
-            // Streamlit의 실제 열기 버튼 클릭
-            var real = document.querySelector('[data-testid="collapsedControl"]');
-            if (real) { real.click(); return; }
-            // 없으면 사이드바 직접 조작
+    function inject() {
+        if (document.getElementById('__sb_fab__')) return;
+
+        // 모바일에서만 보이는 플로팅 토글 버튼
+        var fab = document.createElement('button');
+        fab.id = '__sb_fab__';
+        fab.textContent = '☰';  // ☰
+        Object.assign(fab.style, {
+            position: 'fixed',
+            top: '12px',
+            left: '12px',
+            zIndex: '999999',
+            width: '44px',
+            height: '44px',
+            borderRadius: '12px',
+            background: '#1d1d1f',
+            color: '#ffffff',
+            border: 'none',
+            fontSize: '20px',
+            lineHeight: '1',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 14px rgba(0,0,0,0.35)',
+            padding: '0',
+            fontFamily: 'system-ui'
+        });
+
+        fab.addEventListener('click', function() {
+            // 1) Streamlit collapsedControl 버튼 클릭 시도
+            var c1 = document.querySelector('[data-testid="collapsedControl"]');
+            if (c1) { c1.click(); return; }
+            // 2) 사이드바 내부 접기 버튼
+            var c2 = document.querySelector('[data-testid="stSidebarCollapseButton"] button');
+            if (c2) { c2.click(); return; }
+            // 3) 사이드바 transform 직접 제거
             var sb = document.querySelector('[data-testid="stSidebar"]');
-            if (sb) sb.style.transform = 'none';
-        };
-        document.body.appendChild(btn);
+            if (sb) {
+                sb.style.transform = 'none';
+                sb.style.visibility = 'visible';
+            }
+        });
+
+        document.body.appendChild(fab);
+        updateFab();
     }
 
-    function checkSidebar() {
-        injectToggleBtn();
-        var btn = document.getElementById('__sb_toggle__');
-        if (!btn) return;
-        var sb = document.querySelector('[data-testid="stSidebar"]');
-        if (!sb) return;
-        var rect = sb.getBoundingClientRect();
+    function updateFab() {
+        var fab = document.getElementById('__sb_fab__');
+        if (!fab) return;
         var isMobile = window.innerWidth <= 768;
-        var isHidden = rect.right <= 10 || rect.left < -200;
-        if (isMobile && isHidden) {
-            btn.style.display = 'flex';
-        } else {
-            btn.style.display = 'none';
-        }
+        if (!isMobile) { fab.style.display = 'none'; return; }
+
+        var sb = document.querySelector('[data-testid="stSidebar"]');
+        if (!sb) { fab.style.display = 'flex'; return; }
+
+        var style = window.getComputedStyle(sb);
+        var tx = new DOMMatrix(style.transform).m41;  // translateX 값
+        var isCollapsed = tx < -50 || sb.getBoundingClientRect().right < 20;
+        fab.style.display = isCollapsed ? 'flex' : 'none';
     }
 
-    // 초기 실행 + 주기적 감시
-    setTimeout(checkSidebar, 800);
-    setInterval(checkSidebar, 600);
-    window.addEventListener('resize', checkSidebar);
-    new MutationObserver(checkSidebar).observe(document.body, {subtree:true, attributes:true, attributeFilter:['style','class']});
+    // 앱 로드 후 실행
+    function start() {
+        inject();
+        setInterval(updateFab, 400);
+        window.addEventListener('resize', updateFab);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        setTimeout(start, 500);
+    }
 })();
 </script>
 """
