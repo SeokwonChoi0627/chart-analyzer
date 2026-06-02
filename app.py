@@ -84,39 +84,10 @@ section[data-testid="stSidebar"] * {
     }
 }
 
-/* ── 모바일: sticky 헤더 left 0, 열기 버튼 크게 ── */
+/* ── 모바일: sticky 헤더 left 0 ── */
 @media (max-width: 768px) {
     .sticky-header {
         left: 0 !important;
-    }
-    /* 사이드바 닫혔을 때 열기 버튼 — 크고 눈에 띄게 */
-    button[data-testid="collapsedControl"] {
-        position: fixed !important;
-        top: 12px !important;
-        left: 12px !important;
-        z-index: 1000 !important;
-        width: 44px !important;
-        height: 44px !important;
-        background: #1d1d1f !important;
-        border: none !important;
-        border-radius: 12px !important;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        overflow: hidden !important;
-        font-size: 0 !important;
-        color: transparent !important;
-    }
-    button[data-testid="collapsedControl"]::after {
-        content: "☰" !important;
-        font-size: 20px !important;
-        color: #ffffff !important;
-        line-height: 1 !important;
-        display: block !important;
-    }
-    button[data-testid="collapsedControl"] > * {
-        display: none !important;
     }
 }
 
@@ -262,8 +233,64 @@ def _render_financials(fin: dict, errors: list) -> None:
         st.caption(f"출처: {source}")
 
 
+_SIDEBAR_JS = """
+<script>
+(function() {
+    // 커스텀 플로팅 사이드바 열기 버튼 생성
+    function injectToggleBtn() {
+        if (document.getElementById('__sb_toggle__')) return;
+        var btn = document.createElement('button');
+        btn.id = '__sb_toggle__';
+        btn.innerHTML = '&#9776;';
+        btn.style.cssText = [
+            'position:fixed', 'top:14px', 'left:14px', 'z-index:99999',
+            'width:44px', 'height:44px', 'border-radius:12px',
+            'background:#1d1d1f', 'color:#fff', 'border:none',
+            'font-size:20px', 'cursor:pointer', 'display:none',
+            'align-items:center', 'justify-content:center',
+            'box-shadow:0 2px 12px rgba(0,0,0,0.3)',
+            'transition:opacity 0.2s'
+        ].join('!important;') + '!important';
+        btn.onclick = function() {
+            // Streamlit의 실제 열기 버튼 클릭
+            var real = document.querySelector('[data-testid="collapsedControl"]');
+            if (real) { real.click(); return; }
+            // 없으면 사이드바 직접 조작
+            var sb = document.querySelector('[data-testid="stSidebar"]');
+            if (sb) sb.style.transform = 'none';
+        };
+        document.body.appendChild(btn);
+    }
+
+    function checkSidebar() {
+        injectToggleBtn();
+        var btn = document.getElementById('__sb_toggle__');
+        if (!btn) return;
+        var sb = document.querySelector('[data-testid="stSidebar"]');
+        if (!sb) return;
+        var rect = sb.getBoundingClientRect();
+        var isMobile = window.innerWidth <= 768;
+        var isHidden = rect.right <= 10 || rect.left < -200;
+        if (isMobile && isHidden) {
+            btn.style.display = 'flex';
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    // 초기 실행 + 주기적 감시
+    setTimeout(checkSidebar, 800);
+    setInterval(checkSidebar, 600);
+    window.addEventListener('resize', checkSidebar);
+    new MutationObserver(checkSidebar).observe(document.body, {subtree:true, attributes:true, attributeFilter:['style','class']});
+})();
+</script>
+"""
+
+
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
+    st.markdown(_SIDEBAR_JS, unsafe_allow_html=True)
 
     from datetime import timezone, timedelta
     KST = timezone(timedelta(hours=9))
