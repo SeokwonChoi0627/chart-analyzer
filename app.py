@@ -65,89 +65,32 @@ section[data-testid="stSidebar"] * {
     }
 }
 
-/* ── 사이드바 접기 버튼 (사이드바 내부) ── */
-div[data-testid="stSidebarCollapseButton"] {
-    position: absolute !important;
-    top: 16px !important;
-    right: -18px !important;
-    z-index: 1000 !important;
-}
-div[data-testid="stSidebarCollapseButton"] button {
-    font-size: 0 !important;
-    color: transparent !important;
-    background: #ffffff !important;
-    border: 1.5px solid #c8c8d0 !important;
-    border-radius: 50% !important;
-    width: 36px !important;
-    height: 36px !important;
-    padding: 0 !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
-    cursor: pointer !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    overflow: hidden !important;
-    transition: background 0.15s, box-shadow 0.15s !important;
-}
-div[data-testid="stSidebarCollapseButton"] button::after {
-    content: "" !important;
-    display: block !important;
-    width: 10px !important;
-    height: 10px !important;
-    border-top: 2px solid #555 !important;
-    border-left: 2px solid #555 !important;
-    transform: rotate(-45deg) translateX(2px) !important;
-}
-div[data-testid="stSidebarCollapseButton"] button:hover {
-    background: #f0f0f5 !important;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.2) !important;
-}
-
-/* ── 사이드바 열기 버튼 (사이드바 접혔을 때) ── */
+/* ── 사이드바 접기/열기 버튼 ── */
+div[data-testid="stSidebarCollapseButton"] button,
 button[data-testid="collapsedControl"] {
-    font-size: 0 !important;
-    color: transparent !important;
     background: #ffffff !important;
     border: 1.5px solid #c8c8d0 !important;
     border-radius: 50% !important;
-    width: 40px !important;
-    height: 40px !important;
+    width: 32px !important;
+    height: 32px !important;
     padding: 0 !important;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.18) !important;
-    cursor: pointer !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.14) !important;
     overflow: hidden !important;
-    margin-top: 16px !important;
-    margin-left: 12px !important;
-    transition: background 0.15s, box-shadow 0.15s !important;
+    transition: box-shadow 0.15s, background 0.15s !important;
 }
-button[data-testid="collapsedControl"]::after {
-    content: "" !important;
-    display: block !important;
-    width: 10px !important;
-    height: 10px !important;
-    border-top: 2px solid #333 !important;
-    border-right: 2px solid #333 !important;
-    transform: rotate(45deg) translateX(-2px) !important;
-}
+div[data-testid="stSidebarCollapseButton"] button:hover,
 button[data-testid="collapsedControl"]:hover {
-    background: #f0f0f5 !important;
-    box-shadow: 0 3px 14px rgba(0,0,0,0.22) !important;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.22) !important;
+    background: #f5f5f7 !important;
+}
+div[data-testid="stSidebarCollapseButton"] button > *,
+button[data-testid="collapsedControl"] > * {
+    opacity: 0 !important;
+    font-size: 0 !important;
+    color: transparent !important;
 }
 
-/* 버튼 내부 원본 아이콘/텍스트 제거 */
-div[data-testid="stSidebarCollapseButton"] button span,
-div[data-testid="stSidebarCollapseButton"] button svg,
-div[data-testid="stSidebarCollapseButton"] button p,
-button[data-testid="collapsedControl"] span,
-button[data-testid="collapsedControl"] svg,
-button[data-testid="collapsedControl"] p {
-    display: none !important;
-}
-
-/* 툴팁 완전 숨김 */
+/* 툴팁 숨김 */
 div[data-testid="stTooltipContent"],
 div[data-baseweb="tooltip"],
 [role="tooltip"] {
