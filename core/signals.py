@@ -87,17 +87,34 @@ def _detect_candle(last, prev) -> tuple[float, str, str]:
 
 # ── 일봉 지표 평가 헬퍼 ───────────────────────────────────────────────────────
 
-def _eval_ma(last) -> tuple[float, str, str]:
+def _eval_ma(last, prev) -> tuple[float, str, str]:
+    """
+    이평선 정/역배열 + SMA20 기울기로 추세 강도 보정.
+    - 정배열이라도 SMA20이 꺾이는 중이면 점수 절반 (후기 진입 경고)
+    - 역배열이라도 SMA20이 반등 중이면 점수 절반 (바닥 탈출 가능성)
+    """
     s5  = last.get("sma5")
     s20 = last.get("sma20")
     s60 = last.get("sma60")
+    ps20 = prev.get("sma20")
     if not (_safe(s5) and _safe(s20) and _safe(s60)):
         return 0.0, "데이터 없음", "이평선 계산 불가 (데이터 부족)"
-    if float(s5) > float(s20) > float(s60):
-        return W_MA, "매수", f"정배열(5>{s20:.0f}>60) — 상승추세"
-    if float(s5) < float(s20) < float(s60):
-        return -W_MA, "매도", f"역배열(5<{s20:.0f}<60) — 하락추세"
-    return 0.0, "중립", f"SMA5={float(s5):.0f} / SMA20={float(s20):.0f} / SMA60={float(s60):.0f} — 정/역배열 미해당"
+
+    s5f, s20f, s60f = float(s5), float(s20), float(s60)
+    slope_up = _safe(ps20) and s20f > float(ps20)   # SMA20 상승 중
+    slope_dn = _safe(ps20) and s20f < float(ps20)   # SMA20 하락 중
+
+    if s5f > s20f > s60f:
+        if slope_up:
+            return W_MA, "매수", f"정배열 + SMA20 상승 — 추세 유효"
+        else:
+            return W_MA * 0.5, "매수(약)", f"정배열이나 SMA20 꺾임 — 상승 후기 주의"
+    if s5f < s20f < s60f:
+        if slope_dn:
+            return -W_MA, "매도", f"역배열 + SMA20 하락 — 하락추세 유효"
+        else:
+            return -W_MA * 0.5, "매도(약)", f"역배열이나 SMA20 반등 — 바닥 탈출 가능성"
+    return 0.0, "중립", f"SMA5={s5f:.0f} / SMA20={s20f:.0f} / SMA60={s60f:.0f} — 정/역배열 미해당"
 
 
 def _eval_macd(last, prev) -> tuple[float, str, str]:
@@ -115,42 +132,99 @@ def _eval_macd(last, prev) -> tuple[float, str, str]:
     return -W_MACD / 2, "매도", f"MACD {m:+.4f} < 시그널 {ms:+.4f} — 하락 우위"
 
 
-def _eval_rsi(last) -> tuple[float, str, str]:
-    rsi = last.get("rsi")
+def _eval_rsi(last, prev) -> tuple[float, str, str]:
+    """
+    RSI 단순 위치 → 30/70 돌파 시점 + 50선 방향 감지.
+    - 30 하향 후 30 상향 돌파 = 강한 매수 (반등 확인)
+    - 70 상향 후 70 하향 돌파 = 강한 매도 (과열 해소)
+    - 50선 상향 돌파 = 중립 → 매수 전환 신호
+    - 50선 하향 돌파 = 중립 → 매도 전환 신호
+    - 기존처럼 30 이하 / 70 이상 단순 위치도 절반 점수로 유지
+    """
+    rsi  = last.get("rsi")
+    prsi = prev.get("rsi")
     if not _safe(rsi):
         return 0.0, "데이터 없음", "RSI 계산 불가"
     rsi = float(rsi)
+
+    if _safe(prsi):
+        prsi = float(prsi)
+        # 30선 상향 돌파 (과매도 탈출 = 반등 확인)
+        if prsi <= 30 and rsi > 30:
+            return W_RSI, "매수", f"RSI {prsi:.0f}→{rsi:.0f} — 과매도 탈출 (강한 반등 신호)"
+        # 70선 하향 돌파 (과매수 해소 = 매도 확인)
+        if prsi >= 70 and rsi < 70:
+            return -W_RSI, "매도", f"RSI {prsi:.0f}→{rsi:.0f} — 과매수 해소 (강한 매도 신호)"
+        # 50선 상향 돌파 (추세 전환 확인)
+        if prsi < 50 and rsi >= 50:
+            return W_RSI * 0.5, "매수", f"RSI {prsi:.0f}→{rsi:.0f} — 50선 상향 돌파 (상승 전환)"
+        # 50선 하향 돌파 (추세 약화 확인)
+        if prsi > 50 and rsi <= 50:
+            return -W_RSI * 0.5, "매도", f"RSI {prsi:.0f}→{rsi:.0f} — 50선 하향 돌파 (하락 전환)"
+
+    # 돌파 없을 때 단순 위치 (기존 로직, 절반 점수)
     if rsi <= 30:
-        return W_RSI, "매수", f"RSI {rsi:.0f} — 과매도, 반등 기대"
+        return W_RSI * 0.5, "매수", f"RSI {rsi:.0f} — 과매도 구간 (돌파 대기)"
     if rsi >= 70:
-        return -W_RSI, "매도", f"RSI {rsi:.0f} — 과매수 구간"
+        return -W_RSI * 0.5, "매도", f"RSI {rsi:.0f} — 과매수 구간 (이탈 대기)"
     return 0.0, "중립", f"RSI {rsi:.0f} — 중립 구간 (30~70)"
 
 
 def _eval_bb(last) -> tuple[float, str, str]:
+    """
+    볼린저밴드 %B로 밴드 내 위치를 연속값으로 활용.
+    - %B ≤ 0     : 하단 이탈 → 강한 매수 (W_BB)
+    - %B < 0.2   : 하단 근접 → 약한 매수 (W_BB × 0.5)
+    - %B ≥ 1     : 상단 이탈 → 강한 매도 (-W_BB)
+    - %B > 0.8   : 상단 근접 → 약한 매도 (-W_BB × 0.5)
+    - 그 외       : 중립
+    """
     bbl = last.get("bb_lower");  bbu = last.get("bb_upper")
     c   = last.get("close")
     if not (_safe(bbl) and _safe(bbu) and _safe(c)):
         return 0.0, "데이터 없음", "볼린저밴드 계산 불가"
-    bbl, bbu, c = float(bbl), float(bbu), float(c)
-    if c <= bbl:
-        return W_BB, "매수", f"종가({c:.0f}) ≤ 하단밴드({bbl:.0f}) — 반등 기대"
-    if c >= bbu:
-        return -W_BB, "매도", f"종가({c:.0f}) ≥ 상단밴드({bbu:.0f}) — 과열"
-    return 0.0, "중립", f"밴드 내부 ({bbl:.0f} ~ {bbu:.0f})"
+    bbl, bbu, cv = float(bbl), float(bbu), float(c)
+    band_width = bbu - bbl
+    if band_width <= 0:
+        return 0.0, "중립", "밴드폭 0 — 계산 불가"
+
+    pct_b = (cv - bbl) / band_width  # %B
+
+    if pct_b <= 0:
+        return W_BB, "매수", f"%B {pct_b:.2f} — 하단밴드 이탈 ({cv:.0f} ≤ {bbl:.0f})"
+    if pct_b < 0.2:
+        return W_BB * 0.5, "매수(약)", f"%B {pct_b:.2f} — 하단 근접 (하단 {bbl:.0f})"
+    if pct_b >= 1:
+        return -W_BB, "매도", f"%B {pct_b:.2f} — 상단밴드 이탈 ({cv:.0f} ≥ {bbu:.0f})"
+    if pct_b > 0.8:
+        return -W_BB * 0.5, "매도(약)", f"%B {pct_b:.2f} — 상단 근접 (상단 {bbu:.0f})"
+    return 0.0, "중립", f"%B {pct_b:.2f} — 밴드 중립 구간"
 
 
 def _eval_vol(last, prev) -> tuple[float, str, str]:
+    """
+    거래량 4분면 판별.
+    - 급증(≥1.5배) + 상승 : 강한 매수 (W_VOL)
+    - 급증(≥1.5배) + 하락 : 강한 매도 (-W_VOL)
+    - 저조(<0.7배) + 상승  : 약한 랠리 경고 (-W_VOL × 0.3)
+    - 저조(<0.7배) + 하락  : 공포 매도 소진 가능 (+W_VOL × 0.3)
+    - 그 외                : 중립
+    """
     vr = last.get("vol_ratio")
     if not _safe(vr):
         return 0.0, "데이터 없음", "거래량 비율 계산 불가"
     vr   = float(vr)
     rose = _f(last, "close") >= _f(prev, "close")
+
     if vr >= 1.5 and rose:
-        return W_VOL, "매수", f"거래량 {vr:.1f}배 급증 + 상승"
+        return W_VOL, "매수", f"거래량 {vr:.1f}배 급증 + 상승 — 강한 매수세"
     if vr >= 1.5 and not rose:
-        return -W_VOL, "매도", f"거래량 {vr:.1f}배 급증 + 하락"
-    return 0.0, "중립", f"거래량 {vr:.1f}배 — 급증 기준(1.5배) 미달"
+        return -W_VOL, "매도", f"거래량 {vr:.1f}배 급증 + 하락 — 강한 매도세"
+    if vr < 0.7 and rose:
+        return -W_VOL * 0.3, "주의", f"거래량 {vr:.1f}배 저조 + 상승 — 세력 없는 약한 랠리"
+    if vr < 0.7 and not rose:
+        return W_VOL * 0.3, "중립(약)", f"거래량 {vr:.1f}배 저조 + 하락 — 공포 매도 소진 가능"
+    return 0.0, "중립", f"거래량 {vr:.1f}배 — 기준(1.5배) 미달"
 
 
 # ── 일봉 종합 신호 ─────────────────────────────────────────────────────────────
@@ -167,9 +241,9 @@ def generate_signal(df: pd.DataFrame) -> dict:
     reasons: list[dict] = []
 
     for label, result in [
-        ("이평선",    _eval_ma(last)),
+        ("이평선",    _eval_ma(last, prev)),
         ("MACD",      _eval_macd(last, prev)),
-        ("RSI",       _eval_rsi(last)),
+        ("RSI",       _eval_rsi(last, prev)),
         ("볼린저밴드", _eval_bb(last)),
         ("거래량",    _eval_vol(last, prev)),
     ]:
@@ -210,45 +284,85 @@ def generate_intraday_signal(df: pd.DataFrame) -> dict:
     score = 0.0
     reasons: list[dict] = []
 
-    # 1) RSI (±1.5)
-    rsi = last.get("rsi")
+    # 1) RSI — 30/70 돌파 시점 + 50선 방향 (±1.5)
+    rsi  = last.get("rsi")
+    prsi = prev.get("rsi")
     if _safe(rsi):
         rsi = float(rsi)
-        if rsi <= 30:
-            s, sig, note = _W_INTRA_RSI, "과매도", f"RSI {rsi:.0f} → 단기 반등 구간"
-        elif rsi >= 70:
-            s, sig, note = -_W_INTRA_RSI, "과매수", f"RSI {rsi:.0f} → 단기 과열 구간"
+        if _safe(prsi):
+            prsi = float(prsi)
+            if prsi <= 30 and rsi > 30:
+                s, sig, note = _W_INTRA_RSI, "과매도 탈출", f"RSI {prsi:.0f}→{rsi:.0f} — 반등 확인"
+            elif prsi >= 70 and rsi < 70:
+                s, sig, note = -_W_INTRA_RSI, "과매수 해소", f"RSI {prsi:.0f}→{rsi:.0f} — 매도 확인"
+            elif prsi < 50 and rsi >= 50:
+                s, sig, note = _W_INTRA_RSI * 0.5, "상승전환", f"RSI {prsi:.0f}→{rsi:.0f} — 50선 상향 돌파"
+            elif prsi > 50 and rsi <= 50:
+                s, sig, note = -_W_INTRA_RSI * 0.5, "하락전환", f"RSI {prsi:.0f}→{rsi:.0f} — 50선 하향 돌파"
+            elif rsi <= 30:
+                s, sig, note = _W_INTRA_RSI * 0.5, "과매도", f"RSI {rsi:.0f} → 과매도 구간 (돌파 대기)"
+            elif rsi >= 70:
+                s, sig, note = -_W_INTRA_RSI * 0.5, "과매수", f"RSI {rsi:.0f} → 과매수 구간 (이탈 대기)"
+            else:
+                s, sig, note = 0.0, "중립", f"RSI {rsi:.0f} → 중립 구간 (30~70)"
         else:
-            s, sig, note = 0.0, "중립", f"RSI {rsi:.0f} → 중립 구간 (30~70)"
+            # prev RSI 없을 때 기존 방식
+            if rsi <= 30:
+                s, sig, note = _W_INTRA_RSI, "과매도", f"RSI {rsi:.0f} → 단기 반등 구간"
+            elif rsi >= 70:
+                s, sig, note = -_W_INTRA_RSI, "과매수", f"RSI {rsi:.0f} → 단기 과열 구간"
+            else:
+                s, sig, note = 0.0, "중립", f"RSI {rsi:.0f} → 중립 구간 (30~70)"
     else:
         s, sig, note = 0.0, "데이터 없음", "RSI 계산 불가"
     score += s
     reasons.append({"indicator": "RSI(15분)", "signal": sig, "score": s, "note": note})
 
-    # 2) MACD 히스토그램 방향 (±1.0)
-    hist = last.get("macd_hist")
+    # 2) MACD 히스토그램 방향 전환 감지 (±1.0)
+    hist  = last.get("macd_hist")
+    phist = prev.get("macd_hist")
     if _safe(hist):
         hist = float(hist)
-        if hist > 0:
-            s, sig, note = _W_INTRA_MACD, "상승", f"히스토그램 {hist:+.4f} → 단기 상승 우위"
-        elif hist < 0:
-            s, sig, note = -_W_INTRA_MACD, "하락", f"히스토그램 {hist:+.4f} → 단기 하락 우위"
+        if _safe(phist):
+            phist = float(phist)
+            # 히스토그램 방향 전환 (크로스 2~3봉 전 조기 포착)
+            if phist < 0 and hist > phist:
+                # 음수 구간에서 증가 전환 = 하락 모멘텀 약화
+                s, sig, note = _W_INTRA_MACD, "반등 전환", f"히스토그램 {phist:+.4f}→{hist:+.4f} — 하락 모멘텀 약화"
+            elif phist > 0 and hist < phist:
+                # 양수 구간에서 감소 전환 = 상승 모멘텀 약화
+                s, sig, note = -_W_INTRA_MACD, "하락 전환", f"히스토그램 {phist:+.4f}→{hist:+.4f} — 상승 모멘텀 약화"
+            elif hist > 0:
+                s, sig, note = _W_INTRA_MACD * 0.5, "상승", f"히스토그램 {hist:+.4f} — 단기 상승 우위"
+            elif hist < 0:
+                s, sig, note = -_W_INTRA_MACD * 0.5, "하락", f"히스토그램 {hist:+.4f} — 단기 하락 우위"
+            else:
+                s, sig, note = 0.0, "중립", "히스토그램 0 — 추세 전환점"
         else:
-            s, sig, note = 0.0, "중립", "히스토그램 0 — 추세 전환점"
+            if hist > 0:
+                s, sig, note = _W_INTRA_MACD, "상승", f"히스토그램 {hist:+.4f} → 단기 상승 우위"
+            elif hist < 0:
+                s, sig, note = -_W_INTRA_MACD, "하락", f"히스토그램 {hist:+.4f} → 단기 하락 우위"
+            else:
+                s, sig, note = 0.0, "중립", "히스토그램 0 — 추세 전환점"
     else:
         s, sig, note = 0.0, "데이터 없음", "MACD 계산 불가"
     score += s
     reasons.append({"indicator": "MACD(15분)", "signal": sig, "score": s, "note": note})
 
-    # 3) 거래량 동반 (±0.5)
+    # 3) 거래량 4분면 (±0.5)
     vr = last.get("vol_ratio")
     if _safe(vr):
         vr = float(vr)
-        if vr >= 1.5:
-            if _f(last, "close") >= _f(last, "open"):
-                s, sig, note = _W_INTRA_VOL, "급증+양봉", f"거래량 {vr:.1f}배 급증 · 양봉"
-            else:
-                s, sig, note = -_W_INTRA_VOL, "급증+음봉", f"거래량 {vr:.1f}배 급증 · 음봉"
+        rose = _f(last, "close") >= _f(last, "open")
+        if vr >= 1.5 and rose:
+            s, sig, note = _W_INTRA_VOL, "급증+양봉", f"거래량 {vr:.1f}배 급증 · 양봉"
+        elif vr >= 1.5 and not rose:
+            s, sig, note = -_W_INTRA_VOL, "급증+음봉", f"거래량 {vr:.1f}배 급증 · 음봉"
+        elif vr < 0.7 and rose:
+            s, sig, note = -_W_INTRA_VOL * 0.5, "주의", f"거래량 {vr:.1f}배 저조 · 양봉 — 약한 랠리"
+        elif vr < 0.7 and not rose:
+            s, sig, note = _W_INTRA_VOL * 0.5, "중립(약)", f"거래량 {vr:.1f}배 저조 · 음봉 — 공포 소진 가능"
         else:
             s, sig, note = 0.0, "중립", f"거래량 {vr:.1f}배 — 급증 기준 미달"
     else:
@@ -272,17 +386,26 @@ def generate_intraday_signal(df: pd.DataFrame) -> dict:
     score += s
     reasons.append({"indicator": "이평선(15분)", "signal": sig, "score": s, "note": note})
 
-    # 5) 볼린저밴드 (±0.5)
+    # 5) 볼린저밴드 %B (±0.5)
     bbl = last.get("bb_lower");  bbu = last.get("bb_upper")
     c   = last.get("close")
     if _safe(bbl) and _safe(bbu) and _safe(c):
         bbl, bbu, cv = float(bbl), float(bbu), float(c)
-        if cv <= bbl:
-            s, sig, note = _W_INTRA_BB, "하단터치", f"종가({cv:.0f}) ≤ 하단밴드({bbl:.0f})"
-        elif cv >= bbu:
-            s, sig, note = -_W_INTRA_BB, "상단터치", f"종가({cv:.0f}) ≥ 상단밴드({bbu:.0f})"
+        band_width = bbu - bbl
+        if band_width > 0:
+            pct_b = (cv - bbl) / band_width
+            if pct_b <= 0:
+                s, sig, note = _W_INTRA_BB, "하단이탈", f"%B {pct_b:.2f} — 하단밴드 이탈"
+            elif pct_b < 0.2:
+                s, sig, note = _W_INTRA_BB * 0.5, "하단근접", f"%B {pct_b:.2f} — 하단 근접"
+            elif pct_b >= 1:
+                s, sig, note = -_W_INTRA_BB, "상단이탈", f"%B {pct_b:.2f} — 상단밴드 이탈"
+            elif pct_b > 0.8:
+                s, sig, note = -_W_INTRA_BB * 0.5, "상단근접", f"%B {pct_b:.2f} — 상단 근접"
+            else:
+                s, sig, note = 0.0, "중립", f"%B {pct_b:.2f} — 밴드 중립 구간"
         else:
-            s, sig, note = 0.0, "중립", f"밴드 내부 ({bbl:.0f}~{bbu:.0f})"
+            s, sig, note = 0.0, "중립", "밴드폭 0 — 계산 불가"
     else:
         s, sig, note = 0.0, "데이터 없음", "볼린저밴드 계산 불가"
     score += s
