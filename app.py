@@ -235,82 +235,63 @@ def _render_financials(fin: dict, errors: list) -> None:
 
 _SIDEBAR_JS = """
 <script>
-(function() {
-    function inject() {
-        if (document.getElementById('__sb_fab__')) return;
+(function tryInject() {
+    // 아직 body가 없으면 재시도
+    if (!document.body) { setTimeout(tryInject, 200); return; }
+    if (document.getElementById('__sb_fab__')) return;
 
-        // 모바일에서만 보이는 플로팅 토글 버튼
-        var fab = document.createElement('button');
-        fab.id = '__sb_fab__';
-        fab.textContent = '☰';  // ☰
-        Object.assign(fab.style, {
-            position: 'fixed',
-            top: '12px',
-            left: '12px',
-            zIndex: '999999',
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
-            background: '#1d1d1f',
-            color: '#ffffff',
-            border: 'none',
-            fontSize: '20px',
-            lineHeight: '1',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 14px rgba(0,0,0,0.35)',
-            padding: '0',
-            fontFamily: 'system-ui'
-        });
+    var fab = document.createElement('button');
+    fab.id = '__sb_fab__';
+    fab.innerHTML = '&#9776;';
+    fab.setAttribute('style',
+        'position:fixed!important;' +
+        'top:12px!important;' +
+        'left:12px!important;' +
+        'z-index:2147483647!important;' +
+        'width:44px!important;' +
+        'height:44px!important;' +
+        'border-radius:12px!important;' +
+        'background:#1d1d1f!important;' +
+        'color:#fff!important;' +
+        'border:none!important;' +
+        'font-size:22px!important;' +
+        'cursor:pointer!important;' +
+        'box-shadow:0 3px 16px rgba(0,0,0,0.4)!important;' +
+        'display:none!important;'
+    );
 
-        fab.addEventListener('click', function() {
-            // 1) Streamlit collapsedControl 버튼 클릭 시도
-            var c1 = document.querySelector('[data-testid="collapsedControl"]');
-            if (c1) { c1.click(); return; }
-            // 2) 사이드바 내부 접기 버튼
-            var c2 = document.querySelector('[data-testid="stSidebarCollapseButton"] button');
-            if (c2) { c2.click(); return; }
-            // 3) 사이드바 transform 직접 제거
-            var sb = document.querySelector('[data-testid="stSidebar"]');
-            if (sb) {
-                sb.style.transform = 'none';
-                sb.style.visibility = 'visible';
-            }
-        });
-
-        document.body.appendChild(fab);
-        updateFab();
-    }
-
-    function updateFab() {
-        var fab = document.getElementById('__sb_fab__');
-        if (!fab) return;
-        var isMobile = window.innerWidth <= 768;
-        if (!isMobile) { fab.style.display = 'none'; return; }
-
+    fab.onclick = function() {
+        var btns = [
+            document.querySelector('[data-testid="collapsedControl"]'),
+            document.querySelector('[data-testid="stSidebarCollapseButton"] button')
+        ];
+        for (var i = 0; i < btns.length; i++) {
+            if (btns[i]) { btns[i].click(); return; }
+        }
+        // 최후 수단: transform 직접 제거
         var sb = document.querySelector('[data-testid="stSidebar"]');
-        if (!sb) { fab.style.display = 'flex'; return; }
+        if (sb) { sb.style.cssText += 'transform:none!important;visibility:visible!important;'; }
+    };
 
-        var style = window.getComputedStyle(sb);
-        var tx = new DOMMatrix(style.transform).m41;  // translateX 값
-        var isCollapsed = tx < -50 || sb.getBoundingClientRect().right < 20;
-        fab.style.display = isCollapsed ? 'flex' : 'none';
+    document.body.appendChild(fab);
+
+    function tick() {
+        if (window.innerWidth > 768) {
+            fab.style.setProperty('display', 'none', 'important');
+            return;
+        }
+        var sb = document.querySelector('[data-testid="stSidebar"]');
+        var show = !sb || sb.getBoundingClientRect().right < 30;
+        fab.style.setProperty('display', show ? 'flex' : 'none', 'important');
+        if (show) {
+            fab.style.setProperty('align-items', 'center', 'important');
+            fab.style.setProperty('justify-content', 'center', 'important');
+        }
     }
 
-    // 앱 로드 후 실행
-    function start() {
-        inject();
-        setInterval(updateFab, 400);
-        window.addEventListener('resize', updateFab);
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start);
-    } else {
-        setTimeout(start, 500);
-    }
+    setInterval(tick, 300);
+    window.addEventListener('resize', tick);
+    tick();
 })();
 </script>
 """
