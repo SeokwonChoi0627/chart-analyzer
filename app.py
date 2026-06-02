@@ -20,7 +20,6 @@ st.set_page_config(
     page_title="차트 분석기",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded",
 )
 
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "data", "cache.db")
@@ -46,23 +45,6 @@ html, body, [class*="css"] {
     font-family: system-ui, -apple-system, BlinkMacSystemFont,
                  'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     color: #1d1d1f;
-}
-
-/* ── 종목 헤더 fixed 고정 ── */
-.sticky-header {
-    position: fixed;
-    top: 0;
-    left: 280px;
-    right: 0;
-    z-index: 999;
-    background: #ffffff;
-    padding: 10px 2rem 8px;
-    border-bottom: 1px solid #e5e5ea;
-}
-
-/* ── 고정 헤더 높이만큼 본문 여백 ── */
-div[data-testid="stMainBlockContainer"] {
-    padding-top: 72px !important;
 }
 
 /* ── 사이드바: Apple parchment 배경 ── */
@@ -94,22 +76,6 @@ header[data-testid="stHeader"] {
     visibility: hidden !important;
 }
 
-/* ── 사이드바 항상 표시 고정 ── */
-section[data-testid="stSidebar"] {
-    transform: none !important;
-    min-width: 280px !important;
-    width: 280px !important;
-}
-
-/* ── 사이드바 내부 접기 버튼 숨김 ── */
-div[data-testid="stSidebarCollapseButton"] {
-    display: none !important;
-}
-
-/* ── 메인 영역의 사이드바 열기 버튼 숨김 ── */
-button[data-testid="collapsedControl"] {
-    display: none !important;
-}
 
 /* ── 폼 제출 버튼 (Enter 키 포함) ── */
 div.stFormSubmitButton > button {
