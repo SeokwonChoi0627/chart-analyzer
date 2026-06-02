@@ -68,7 +68,6 @@ section[data-testid="stSidebar"] * {
 /* ── 사이드바 접기/펼치기 버튼 스타일 ── */
 div[data-testid="stSidebarCollapseButton"] button,
 button[data-testid="collapsedControl"] {
-    /* 기존 텍스트(keyboard_double...) 숨기기 */
     font-size: 0 !important;
     color: transparent !important;
     background: #ffffff !important;
@@ -82,23 +81,54 @@ button[data-testid="collapsedControl"] {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    overflow: hidden !important;
 }
+
+/* 버튼 내부 span(아이콘 텍스트) 완전 제거 */
+div[data-testid="stSidebarCollapseButton"] button span,
+button[data-testid="collapsedControl"] span,
+div[data-testid="stSidebarCollapseButton"] button svg,
+button[data-testid="collapsedControl"] svg,
+div[data-testid="stSidebarCollapseButton"] button p,
+button[data-testid="collapsedControl"] p {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    font-size: 0 !important;
+    color: transparent !important;
+}
+
+/* 화살표 기호만 CSS로 표시 */
 div[data-testid="stSidebarCollapseButton"] button::after {
     content: "‹" !important;
     font-size: 18px !important;
     color: #555 !important;
     line-height: 1 !important;
+    display: block !important;
 }
 button[data-testid="collapsedControl"]::after {
     content: "›" !important;
     font-size: 18px !important;
     color: #555 !important;
     line-height: 1 !important;
+    display: block !important;
 }
 div[data-testid="stSidebarCollapseButton"] button:hover,
 button[data-testid="collapsedControl"]:hover {
     background: #f0f0f5 !important;
     border-color: #aaa !important;
+}
+
+/* Streamlit 툴팁 팝업 숨김 */
+div[data-testid="stTooltipContent"],
+div[class*="tooltip"],
+div[data-baseweb="tooltip"],
+[role="tooltip"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
 }
 
 /* ── 메인 타이틀 ── */
@@ -255,9 +285,15 @@ _JS = """
             document.querySelectorAll(sel).forEach(function(btn) {
                 btn.removeAttribute('title');
                 btn.removeAttribute('aria-label');
-                var span = btn.querySelector('span');
-                if (span) span.style.display = 'none';
+                btn.removeAttribute('aria-describedby');
+                btn.querySelectorAll('span, p, svg').forEach(function(el) {
+                    el.style.cssText = 'display:none!important;visibility:hidden!important;font-size:0!important;width:0!important;height:0!important;';
+                });
             });
+        });
+        /* 툴팁 div 제거 */
+        document.querySelectorAll('[data-baseweb="tooltip"],[role="tooltip"],[data-testid="stTooltipContent"]').forEach(function(el) {
+            el.remove();
         });
     }
     clean();
