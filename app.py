@@ -84,11 +84,32 @@ section[data-testid="stSidebar"] * {
     }
 }
 
-/* ── 모바일: sticky 헤더 left 0 ── */
+/* ── 모바일 전용 ── */
 @media (max-width: 768px) {
+    /* 사이드바 완전 숨김 */
+    section[data-testid="stSidebar"],
+    div[data-testid="stSidebarCollapseButton"],
+    button[data-testid="collapsedControl"] {
+        display: none !important;
+    }
+    /* 헤더 left 0 */
     .sticky-header {
         left: 0 !important;
+        padding: 8px 16px 6px !important;
     }
+    /* 본문 여백 조정 */
+    div[data-testid="stMainBlockContainer"] {
+        padding-top: 56px !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+    /* 모바일 검색 폼 표시 */
+    .mobile-search { display: block !important; }
+}
+
+/* 데스크톱에서 모바일 검색 폼 숨김 */
+@media (min-width: 769px) {
+    .mobile-search { display: none !important; }
 }
 
 /* ── 메인 타이틀 ── */
@@ -233,93 +254,47 @@ def _render_financials(fin: dict, errors: list) -> None:
         st.caption(f"출처: {source}")
 
 
-_SIDEBAR_JS = """
-<script>
-(function tryInject() {
-    // 아직 body가 없으면 재시도
-    if (!document.body) { setTimeout(tryInject, 200); return; }
-    if (document.getElementById('__sb_fab__')) return;
-
-    var fab = document.createElement('button');
-    fab.id = '__sb_fab__';
-    fab.innerHTML = '&#9776;';
-    fab.setAttribute('style',
-        'position:fixed!important;' +
-        'top:12px!important;' +
-        'left:12px!important;' +
-        'z-index:2147483647!important;' +
-        'width:44px!important;' +
-        'height:44px!important;' +
-        'border-radius:12px!important;' +
-        'background:#1d1d1f!important;' +
-        'color:#fff!important;' +
-        'border:none!important;' +
-        'font-size:22px!important;' +
-        'cursor:pointer!important;' +
-        'box-shadow:0 3px 16px rgba(0,0,0,0.4)!important;' +
-        'display:none!important;'
-    );
-
-    fab.onclick = function() {
-        var btns = [
-            document.querySelector('[data-testid="collapsedControl"]'),
-            document.querySelector('[data-testid="stSidebarCollapseButton"] button')
-        ];
-        for (var i = 0; i < btns.length; i++) {
-            if (btns[i]) { btns[i].click(); return; }
-        }
-        // 최후 수단: transform 직접 제거
-        var sb = document.querySelector('[data-testid="stSidebar"]');
-        if (sb) { sb.style.cssText += 'transform:none!important;visibility:visible!important;'; }
-    };
-
-    document.body.appendChild(fab);
-
-    function tick() {
-        if (window.innerWidth > 768) {
-            fab.style.setProperty('display', 'none', 'important');
-            return;
-        }
-        var sb = document.querySelector('[data-testid="stSidebar"]');
-        var show = !sb || sb.getBoundingClientRect().right < 30;
-        fab.style.setProperty('display', show ? 'flex' : 'none', 'important');
-        if (show) {
-            fab.style.setProperty('align-items', 'center', 'important');
-            fab.style.setProperty('justify-content', 'center', 'important');
-        }
-    }
-
-    setInterval(tick, 300);
-    window.addEventListener('resize', tick);
-    tick();
-})();
-</script>
-"""
 
 
 def main():
     st.markdown(_CSS, unsafe_allow_html=True)
-    st.markdown(_SIDEBAR_JS, unsafe_allow_html=True)
 
     from datetime import timezone, timedelta
     KST = timezone(timedelta(hours=9))
     now = datetime.now(KST)
 
-    # ── 사이드바: 입력 폼 ─────────────────────────────────────────────────────
+    # ── 사이드바 (데스크톱) ───────────────────────────────────────────────────
     with st.sidebar:
         st.title("차트 분석기")
         st.markdown('<div style="margin-bottom:28px;"></div>', unsafe_allow_html=True)
         with st.form("analysis_form"):
-            symbol = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
-            run = st.form_submit_button("분석 실행", use_container_width=True)
+            symbol_sb = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
+            run_sb = st.form_submit_button("분석 실행", use_container_width=True)
         st.markdown(
             '<div style="font-size:14px;color:#aaa;text-align:left;margin-top:2px;">'
             'made by penguin</div>',
             unsafe_allow_html=True,
         )
 
+    # ── 모바일 상단 검색 폼 ───────────────────────────────────────────────────
+    st.markdown('<div class="mobile-search">', unsafe_allow_html=True)
+    with st.form("mobile_form"):
+        st.markdown(
+            '<div style="font-size:18px;font-weight:700;color:#1d1d1f;'
+            'letter-spacing:-0.4px;margin-bottom:10px;">차트 분석기</div>',
+            unsafe_allow_html=True,
+        )
+        symbol_mb = st.text_input("종목", placeholder="삼성전자 / AAPL / 애플",
+                                   label_visibility="collapsed", key="mobile_symbol")
+        run_mb = st.form_submit_button("분석 실행", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 어느 폼이 실행됐는지 확인
+    run    = run_sb or run_mb
+    symbol = (symbol_sb if run_sb else symbol_mb) if run else ""
+
     if not run:
-        st.info("좌측에서 종목을 입력하고 '분석 실행'을 누르세요.")
+        st.info("종목을 입력하고 '분석 실행'을 누르세요.")
         return
 
     if not symbol.strip():
