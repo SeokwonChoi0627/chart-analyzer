@@ -336,10 +336,10 @@ def render_entry_point_card(daily_score: float, intraday_score: float,
         # 헤더 행
         f'<div style="display:flex;align-items:center;'
         f'justify-content:space-between;margin-bottom:16px;">'
-        f'<span style="font-size:11px;font-weight:600;color:#8e8e93;'
-        f'letter-spacing:0.6px;text-transform:uppercase;">종합 결론</span>'
-        f'<span style="font-size:12px;font-weight:600;color:#ffffff;'
-        f'background:{accent};padding:4px 14px;border-radius:9999px;'
+        f'<span style="font-size:22px;font-weight:700;color:#1d1d1f;'
+        f'letter-spacing:-0.4px;">종합 결론</span>'
+        f'<span style="font-size:13px;font-weight:600;color:#ffffff;'
+        f'background:{accent};padding:5px 16px;border-radius:9999px;'
         f'letter-spacing:-0.12px;">{label}</span>'
         f'</div>'
 

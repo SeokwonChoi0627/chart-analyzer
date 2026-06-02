@@ -40,6 +40,17 @@ def get_financials(symbol: str, market: str) -> tuple[dict, list]:
 
 
 
+_OG_META = """
+<meta property="og:title" content="차트 분석기" />
+<meta property="og:description" content="일봉 + 15분봉 다중 타임프레임 분석으로 매수·매도 타점을 자동으로 포착합니다." />
+<meta property="og:image" content="https://raw.githubusercontent.com/SeokwonChoi0627/chart-analyzer/master/assets/og_preview.png" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="차트 분석기" />
+<meta name="twitter:description" content="일봉 + 15분봉 다중 타임프레임 분석으로 매수·매도 타점을 자동으로 포착합니다." />
+<meta name="twitter:image" content="https://raw.githubusercontent.com/SeokwonChoi0627/chart-analyzer/master/assets/og_preview.png" />
+"""
+
 _CHART_CONFIG = {
     "scrollZoom": False,       # 스크롤 줌 비활성화
     "doubleClick": False,      # 더블클릭 리셋 비활성화
@@ -267,6 +278,7 @@ def _render_financials(fin: dict, errors: list) -> None:
 
 
 def main():
+    st.markdown(_OG_META, unsafe_allow_html=True)
     st.markdown(_CSS, unsafe_allow_html=True)
 
     from datetime import timezone, timedelta
