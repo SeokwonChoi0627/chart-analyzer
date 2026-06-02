@@ -100,7 +100,8 @@ def _to_yahoo_symbols(symbol: str, market: str) -> list[str]:
     if market == "KR":
         code = _resolve_kr_code(symbol)
         return [f"{code}.KS", f"{code}.KQ"]
-    return [symbol.upper()]
+    from .yfinance_us import resolve_us_symbol
+    return [resolve_us_symbol(symbol)]
 
 
 def _fetch_yahoo(yf_symbol: str, days: int) -> tuple[pd.DataFrame, str]:

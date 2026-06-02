@@ -661,9 +661,8 @@ def fetch_financials(symbol: str, market: str) -> tuple[dict, list[str]]:
         return {}, all_errors
 
     # ── 미국 주식 ──────────────────────────────────────────────────────────────
-    _alias = {"TSMC": "TSM", "GOOGLE": "GOOGL", "ALPHABET": "GOOGL",
-              "FACEBOOK": "META", "TWITTER": "X", "BERKSHIRE": "BRK-B"}
-    sym = _alias.get(symbol.upper(), symbol.upper())
+    from .yfinance_us import resolve_us_symbol
+    sym = resolve_us_symbol(symbol)
     session, crumb = _get_yf_session()
 
     # 1차: HTML 파싱 (crumb 불필요 — SSL MITM 환경에서도 동작)
