@@ -56,15 +56,11 @@ section[data-testid="stSidebar"] * {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* ── PC: 사이드바 항상 펼침 고정 ── */
+/* ── PC: 사이드바 너비 확장 ── */
 @media (min-width: 769px) {
     section[data-testid="stSidebar"] {
-        transform: none !important;
-        min-width: 260px !important;
-        width: 260px !important;
-    }
-    div[data-testid="stSidebarCollapseButton"] {
-        display: none !important;
+        min-width: 320px !important;
+        width: 320px !important;
     }
 }
 
