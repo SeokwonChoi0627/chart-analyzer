@@ -41,13 +41,16 @@ def get_financials(symbol: str, market: str) -> tuple[dict, list]:
 
 
 _OG_META = """
-<meta property="og:title" content="매매 타점 차트분석기 (made by penguin)" />
-<meta property="og:description" content="일봉 × 15분봉 이중 타임프레임 자동 분석으로 매수·매도 타점을 정확하게 포착합니다. 이평선·MACD·RSI·볼린저밴드 복합 지표를 한눈에." />
+<meta property="og:title" content="매매타점 차트분석기" />
+<meta property="og:description" content="펭귄맨의 투자비법 노하우 Made by. Penguin" />
 <meta property="og:image" content="https://raw.githubusercontent.com/SeokwonChoi0627/chart-analyzer/master/assets/og_preview.png" />
+<meta property="og:image:width" content="1456" />
+<meta property="og:image:height" content="816" />
 <meta property="og:type" content="website" />
+<meta property="og:locale" content="ko_KR" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="매매 타점 차트분석기 (made by penguin)" />
-<meta name="twitter:description" content="일봉 × 15분봉 이중 타임프레임 자동 분석으로 매수·매도 타점을 정확하게 포착합니다. 이평선·MACD·RSI·볼린저밴드 복합 지표를 한눈에." />
+<meta name="twitter:title" content="매매타점 차트분석기" />
+<meta name="twitter:description" content="펭귄맨의 투자비법 노하우 Made by. Penguin" />
 <meta name="twitter:image" content="https://raw.githubusercontent.com/SeokwonChoi0627/chart-analyzer/master/assets/og_preview.png" />
 """
 
