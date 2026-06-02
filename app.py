@@ -48,9 +48,10 @@ html, body, [class*="css"] {
     color: #1d1d1f;
 }
 
-/* ── 사이드바: 배경 ── */
+/* ── 사이드바: 배경 + 우측 테두리로 구분 ── */
 section[data-testid="stSidebar"] {
-    background-color: #f5f5f7 !important;
+    background-color: #ebebf0 !important;
+    border-right: 1px solid #d1d1d6 !important;
 }
 section[data-testid="stSidebar"] * {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -62,6 +63,42 @@ section[data-testid="stSidebar"] * {
         min-width: 320px !important;
         width: 320px !important;
     }
+}
+
+/* ── 사이드바 접기/펼치기 버튼 스타일 ── */
+div[data-testid="stSidebarCollapseButton"] button,
+button[data-testid="collapsedControl"] {
+    /* 기존 텍스트(keyboard_double...) 숨기기 */
+    font-size: 0 !important;
+    color: transparent !important;
+    background: #ffffff !important;
+    border: 1px solid #d1d1d6 !important;
+    border-radius: 50% !important;
+    width: 28px !important;
+    height: 28px !important;
+    padding: 0 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12) !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+div[data-testid="stSidebarCollapseButton"] button::after {
+    content: "‹" !important;
+    font-size: 18px !important;
+    color: #555 !important;
+    line-height: 1 !important;
+}
+button[data-testid="collapsedControl"]::after {
+    content: "›" !important;
+    font-size: 18px !important;
+    color: #555 !important;
+    line-height: 1 !important;
+}
+div[data-testid="stSidebarCollapseButton"] button:hover,
+button[data-testid="collapsedControl"]:hover {
+    background: #f0f0f5 !important;
+    border-color: #aaa !important;
 }
 
 /* ── 메인 타이틀 ── */
