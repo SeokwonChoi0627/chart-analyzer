@@ -261,6 +261,22 @@ def generate_signal(df: pd.DataFrame) -> dict:
     return {"score": round(score, 2), "verdict": classify(score), "reasons": reasons}
 
 
+# ── 급등 과열 필터 ────────────────────────────────────────────────────────────
+
+def is_overheated(df: pd.DataFrame, n: int = 10, threshold: float = 0.15) -> bool:
+    """최근 n봉의 누적 수익률이 threshold를 초과하면 단기 과열로 판단."""
+    if df.empty or len(df) < n + 1:
+        return False
+    closes = df["close"].dropna()
+    if len(closes) < n + 1:
+        return False
+    base = float(closes.iloc[-(n + 1)])
+    if base <= 0:
+        return False
+    cumret = (float(closes.iloc[-1]) - base) / base
+    return cumret > threshold
+
+
 # ── 15분봉 단기 신호 ──────────────────────────────────────────────────────────
 
 def _classify_intraday(score: float) -> str:
@@ -271,13 +287,17 @@ def _classify_intraday(score: float) -> str:
     return "단기 매도 타이밍"
 
 
-def generate_intraday_signal(df: pd.DataFrame) -> dict:
+def generate_intraday_signal(
+    df: pd.DataFrame,
+    overheat_n: int = 10,
+    overheat_threshold: float = 0.15,
+) -> dict:
     """15분봉 compute_all 결과를 받아 단기 보조 신호 생성.
     점수 범위: ±4.5 (RSI ±1.5 / MACD ±1.0 / 거래량·이평선·BB·캔들 각 ±0.5)
     모든 지표를 항상 reasons에 포함."""
     if df.empty or len(df) < 26:
         return {"score": 0.0, "verdict": "데이터 부족", "reasons": [],
-                "last_price": None, "last_time": ""}
+                "last_price": None, "last_time": "", "overheated": False}
 
     last = df.iloc[-1]
     prev = df.iloc[-2] if len(df) >= 2 else last
@@ -420,10 +440,15 @@ def generate_intraday_signal(df: pd.DataFrame) -> dict:
     last_price = float(last["close"]) if _safe(last.get("close")) else None
     last_time  = str(df.index[-1])[:16]
 
+    overheated = is_overheated(df, n=overheat_n, threshold=overheat_threshold)
+    if overheated and score > 0:
+        score = 0.0
+
     return {
         "score":      round(score, 2),
         "verdict":    _classify_intraday(score),
         "reasons":    reasons,
         "last_price": last_price,
         "last_time":  last_time,
+        "overheated": overheated,
     }

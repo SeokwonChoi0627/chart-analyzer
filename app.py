@@ -295,8 +295,17 @@ def main():
         with st.form("analysis_form"):
             symbol_sb = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
             run_sb = st.form_submit_button("분석 실행", use_container_width=True)
+        st.markdown("---")
         st.markdown(
-            '<div style="font-size:14px;color:#aaa;text-align:left;margin-top:2px;">'
+            '<div style="font-size:12px;font-weight:600;color:#888;'
+            'letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;">'
+            '급등 과열 필터</div>',
+            unsafe_allow_html=True,
+        )
+        overheat_n = st.slider("기준 봉 수", min_value=3, max_value=30, value=10, step=1)
+        overheat_thr = st.slider("과열 임계값 (%)", min_value=5, max_value=50, value=15, step=1)
+        st.markdown(
+            '<div style="font-size:14px;color:#aaa;text-align:left;margin-top:8px;">'
             'made by penguin</div>',
             unsafe_allow_html=True,
         )
@@ -425,7 +434,17 @@ def main():
     signal_15m   = {"score": 0.0, "verdict": "데이터 부족", "reasons": [], "last_time": ""}
     if not df_15m.empty:
         enriched_15m = compute_all(df_15m)
-        signal_15m   = generate_intraday_signal(enriched_15m)
+        signal_15m   = generate_intraday_signal(
+            enriched_15m,
+            overheat_n=overheat_n,
+            overheat_threshold=overheat_thr / 100,
+        )
+
+    if signal_15m.get("overheated"):
+        st.warning(
+            f"⚠️ 단기 과열 구간 — 매수 신호 억제됨 "
+            f"(최근 {overheat_n}봉 누적 상승 {overheat_thr}% 초과)"
+        )
 
     # ── 복합 타점 카드 (최상단) ───────────────────────────────────────────────
     render_entry_point_card(
