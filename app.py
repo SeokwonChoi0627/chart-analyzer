@@ -302,15 +302,6 @@ def main():
         with st.form("analysis_form"):
             symbol_sb = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
             run_sb = st.form_submit_button("분석 실행", use_container_width=True)
-        st.markdown("---")
-        st.markdown(
-            '<div style="font-size:12px;font-weight:600;color:#888;'
-            'letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;">'
-            '급등 과열 필터</div>',
-            unsafe_allow_html=True,
-        )
-        overheat_n = st.slider("기준 봉 수", min_value=3, max_value=30, value=10, step=1)
-        overheat_thr = st.slider("과열 임계값 (%)", min_value=5, max_value=50, value=15, step=1)
         # ── 시장 심리 지표 ───────────────────────────────────────────────
         st.markdown("---")
         st.markdown(
@@ -413,9 +404,18 @@ def main():
         fin_data, fin_errors = get_financials(symbol.strip(), market)
     company_name = fin_data.get("company_name", "") if fin_data else ""
 
-    # ── 사이드바 하단: 재무 정보 ──────────────────────────────────────────────
+    # ── 사이드바 하단: 재무 정보 + 과열 필터 ────────────────────────────────────
     with st.sidebar:
         _render_financials(fin_data, fin_errors)
+        st.markdown("---")
+        st.markdown(
+            '<div style="font-size:12px;font-weight:600;color:#888;'
+            'letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;">'
+            '급등 과열 필터</div>',
+            unsafe_allow_html=True,
+        )
+        overheat_n = st.slider("기준 봉 수", min_value=3, max_value=30, value=10, step=1)
+        overheat_thr = st.slider("과열 임계값 (%)", min_value=5, max_value=50, value=15, step=1)
     ticker_upper = symbol.strip().upper()
     kst_time = now.strftime("%H:%M")
     kst_date = now.strftime("%Y.%m.%d")
