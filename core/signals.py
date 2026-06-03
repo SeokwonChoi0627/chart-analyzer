@@ -287,10 +287,29 @@ def _classify_intraday(score: float) -> str:
     return "단기 매도 타이밍"
 
 
+def is_structural_break(
+    df_15m: pd.DataFrame,
+    daily_atr: float,
+    lookback: int = 20,
+    atr_mult: float = 1.5,
+) -> bool:
+    """최근 lookback봉 고점 대비 낙폭이 daily_atr × atr_mult 초과면 구조적 이탈."""
+    if daily_atr <= 0 or df_15m.empty or len(df_15m) < 2:
+        return False
+    closes = df_15m["close"].dropna()
+    if len(closes) < 2:
+        return False
+    recent_high = float(closes.iloc[-lookback:].max()) if len(closes) >= lookback else float(closes.max())
+    current     = float(closes.iloc[-1])
+    drawdown    = recent_high - current
+    return drawdown > daily_atr * atr_mult
+
+
 def generate_intraday_signal(
     df: pd.DataFrame,
     overheat_n: int = 10,
     overheat_threshold: float = 0.15,
+    daily_atr: float = 0.0,
 ) -> dict:
     """15분봉 compute_all 결과를 받아 단기 보조 신호 생성.
     점수 범위: ±4.5 (RSI ±1.5 / MACD ±1.0 / 거래량·이평선·BB·캔들 각 ±0.5)
@@ -440,15 +459,18 @@ def generate_intraday_signal(
     last_price = float(last["close"]) if _safe(last.get("close")) else None
     last_time  = str(df.index[-1])[:16]
 
-    overheated = is_overheated(df, n=overheat_n, threshold=overheat_threshold)
+    overheated      = is_overheated(df, n=overheat_n, threshold=overheat_threshold)
+    structural_break = is_structural_break(df, daily_atr=daily_atr) if daily_atr > 0 else False
+
     if overheated and score > 0:
         score = 0.0
 
     return {
-        "score":      round(score, 2),
-        "verdict":    _classify_intraday(score),
-        "reasons":    reasons,
-        "last_price": last_price,
-        "last_time":  last_time,
-        "overheated": overheated,
+        "score":            round(score, 2),
+        "verdict":          _classify_intraday(score),
+        "reasons":          reasons,
+        "last_price":       last_price,
+        "last_time":        last_time,
+        "overheated":       overheated,
+        "structural_break": structural_break,
     }

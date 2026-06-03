@@ -52,6 +52,21 @@ def add_volume_ratio(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
     return out
 
 
+def add_atr(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """ATR(Average True Range) 컬럼 추가. 원본 불변."""
+    out = df.copy()
+    high = out["high"]
+    low  = out["low"]
+    prev_close = out["close"].shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low  - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    out["atr"] = tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    return out
+
+
 def compute_all(df: pd.DataFrame) -> pd.DataFrame:
     """모든 지표를 순서대로 적용한 DataFrame 반환. 원본 불변."""
     out = add_sma(df, windows=(5, 20, 60))
@@ -59,4 +74,5 @@ def compute_all(df: pd.DataFrame) -> pd.DataFrame:
     out = add_macd(out, fast=12, slow=26, signal=9)
     out = add_bollinger(out, window=20, num_std=2.0)
     out = add_volume_ratio(out, window=20)
+    out = add_atr(out, period=14)
     return out

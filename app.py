@@ -11,6 +11,7 @@ from core.data.financials import fetch_financials
 from core.data.base import detect_market
 from core.indicators import compute_all
 from core.signals import generate_signal, generate_intraday_signal
+from core.market_sentiment import fetch_10y_yield, fetch_fear_greed, rating_ko
 from ui.chart import build_chart, build_intraday_chart
 from ui.panels import render_signal_card, render_reasons_table, render_intraday_panel, render_entry_point_card
 
@@ -31,6 +32,12 @@ PERIOD_DAYS = 190  # 6개월 고정
 def get_cache() -> OhlcvCache:
     os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
     return OhlcvCache(CACHE_PATH)
+
+
+@st.cache_data(ttl=300)
+def get_market_sentiment() -> tuple[dict, dict]:
+    """10Y 국채금리 + CNN F&G (5분 캐시)."""
+    return fetch_10y_yield(), fetch_fear_greed()
 
 
 @st.cache_data(ttl=3600)
@@ -304,6 +311,50 @@ def main():
         )
         overheat_n = st.slider("기준 봉 수", min_value=3, max_value=30, value=10, step=1)
         overheat_thr = st.slider("과열 임계값 (%)", min_value=5, max_value=50, value=15, step=1)
+        # ── 시장 심리 지표 ───────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown(
+            '<div style="font-size:12px;font-weight:600;color:#888;'
+            'letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;">'
+            '시장 심리</div>',
+            unsafe_allow_html=True,
+        )
+        tnx, fg = get_market_sentiment()
+        if tnx.get("value") is not None:
+            chg_tnx = tnx.get("change", 0.0)
+            chg_color_tnx = "#c62828" if chg_tnx > 0 else "#0a8a0a"
+            st.markdown(
+                f'<div style="margin-bottom:6px;">'
+                f'<span style="font-size:11px;color:#aaa;">미 10년물 국채금리</span><br>'
+                f'<span style="font-size:18px;font-weight:700;color:#1d1d1f;">{tnx["value"]}%</span>'
+                f'<span style="font-size:12px;color:{chg_color_tnx};margin-left:6px;">{chg_tnx:+.3f}%p</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("10년물 금리 조회 실패")
+        if fg.get("score") is not None:
+            score_fg = fg["score"]
+            if score_fg <= 25:
+                bar_color = "#c62828"
+            elif score_fg <= 45:
+                bar_color = "#e65100"
+            elif score_fg <= 55:
+                bar_color = "#888"
+            elif score_fg <= 75:
+                bar_color = "#2e7d32"
+            else:
+                bar_color = "#0a8a0a"
+            st.markdown(
+                f'<div>'
+                f'<span style="font-size:11px;color:#aaa;">CNN 공포·탐욕 지수</span><br>'
+                f'<span style="font-size:18px;font-weight:700;color:{bar_color};">{score_fg:.0f}</span>'
+                f'<span style="font-size:12px;color:{bar_color};margin-left:6px;">{rating_ko(fg.get("rating",""))}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("공포·탐욕 지수 조회 실패")
         st.markdown(
             '<div style="font-size:14px;color:#aaa;text-align:left;margin-top:8px;">'
             'made by penguin</div>',
@@ -434,10 +485,13 @@ def main():
     signal_15m   = {"score": 0.0, "verdict": "데이터 부족", "reasons": [], "last_time": ""}
     if not df_15m.empty:
         enriched_15m = compute_all(df_15m)
+        _atr_val = enriched.get("atr", pd.Series(dtype=float))
+        daily_atr = float(_atr_val.iloc[-1]) if hasattr(_atr_val, "iloc") and len(_atr_val) and pd.notna(_atr_val.iloc[-1]) else 0.0
         signal_15m   = generate_intraday_signal(
             enriched_15m,
             overheat_n=overheat_n,
             overheat_threshold=overheat_thr / 100,
+            daily_atr=daily_atr,
         )
 
     if signal_15m.get("overheated"):
@@ -445,6 +499,8 @@ def main():
             f"⚠️ 단기 과열 구간 — 매수 신호 억제됨 "
             f"(최근 {overheat_n}봉 누적 상승 {overheat_thr}% 초과)"
         )
+    if signal_15m.get("structural_break"):
+        st.warning("⚠️ 추세 이탈 감지 — ATR 기준 낙폭 초과 (눌림목보다 반전 가능성)")
 
     # ── 복합 타점 카드 (최상단) ───────────────────────────────────────────────
     render_entry_point_card(
