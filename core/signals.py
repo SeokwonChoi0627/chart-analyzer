@@ -316,7 +316,8 @@ def generate_intraday_signal(
     모든 지표를 항상 reasons에 포함."""
     if df.empty or len(df) < 26:
         return {"score": 0.0, "verdict": "데이터 부족", "reasons": [],
-                "last_price": None, "last_time": "", "overheated": False}
+                "last_price": None, "last_time": "", "overheated": False,
+                "structural_break": False}
 
     last = df.iloc[-1]
     prev = df.iloc[-2] if len(df) >= 2 else last

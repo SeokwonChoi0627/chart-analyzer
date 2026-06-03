@@ -5,3 +5,5 @@ finance-datareader>=0.9,<1.0
 python-dotenv>=1.0,<2.0
 openpyxl>=3.1,<4.0
 pytest>=8.0,<9.0
+yfinance>=0.2,<1.0
+pykrx>=1.0
