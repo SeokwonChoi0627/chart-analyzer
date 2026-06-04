@@ -10,7 +10,7 @@ from core.data.intraday import fetch_15min
 from core.data.financials import fetch_financials
 from core.data.base import detect_market
 from core.indicators import compute_all
-from core.signals import generate_signal, generate_intraday_signal
+from core.signals import generate_signal, generate_intraday_signal, is_overheated
 from core.market_sentiment import fetch_10y_yield, fetch_fear_greed, rating_ko
 from ui.chart import build_chart, build_intraday_chart
 from ui.panels import render_signal_card, render_reasons_table, render_intraday_panel, render_entry_point_card
@@ -416,6 +416,29 @@ def main():
         )
         overheat_n = st.slider("기준 봉 수", min_value=3, max_value=30, value=10, step=1)
         overheat_thr = st.slider("과열 임계값 (%)", min_value=5, max_value=50, value=15, step=1)
+
+        # ── 일봉 과열 상태 표시 ─────────────────────────────────────────
+        daily_overheated = is_overheated(enriched, n=overheat_n, threshold=overheat_thr / 100)
+        if daily_overheated:
+            st.markdown(
+                f'<div style="margin-top:8px;padding:8px 12px;border-radius:10px;'
+                f'background:#fff0f0;border:1px solid #ffcccc;">'
+                f'<span style="font-size:12px;font-weight:700;color:#c62828;">🔥 일봉 과열 감지</span><br>'
+                f'<span style="font-size:11px;color:#c62828;">'
+                f'최근 {overheat_n}봉 누적 {overheat_thr}% 초과 — 신규 매수 주의</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f'<div style="margin-top:8px;padding:8px 12px;border-radius:10px;'
+                f'background:#f0fff4;border:1px solid #b2dfdb;">'
+                f'<span style="font-size:12px;font-weight:700;color:#2e7d32;">✅ 일봉 정상 구간</span><br>'
+                f'<span style="font-size:11px;color:#2e7d32;">'
+                f'최근 {overheat_n}봉 누적 {overheat_thr}% 미만</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
     ticker_upper = symbol.strip().upper()
     kst_time = now.strftime("%H:%M")
     kst_date = now.strftime("%Y.%m.%d")
