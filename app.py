@@ -532,6 +532,30 @@ def main():
         fin=fin_data,
     )
 
+    # ── 일봉 과열 상태 카드 (종합결론↔일봉 기준판정 사이) ────────────────────
+    if daily_overheated:
+        st.markdown(
+            f'<div style="padding:14px 20px;border-radius:14px;margin-bottom:8px;'
+            f'background:#fff0f0;border:1.5px solid #ffcccc;'
+            f'font-family:system-ui,-apple-system,sans-serif;">'
+            f'<span style="font-size:14px;font-weight:700;color:#c62828;">🔥 일봉 과열 감지</span>'
+            f'<span style="font-size:13px;color:#c62828;margin-left:10px;">'
+            f'최근 {overheat_n}봉 누적 {overheat_thr}% 초과 — 신규 매수 주의</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div style="padding:14px 20px;border-radius:14px;margin-bottom:8px;'
+            f'background:#f0fff4;border:1.5px solid #b2dfdb;'
+            f'font-family:system-ui,-apple-system,sans-serif;">'
+            f'<span style="font-size:14px;font-weight:700;color:#2e7d32;">✅ 일봉 정상 구간</span>'
+            f'<span style="font-size:13px;color:#2e7d32;margin-left:10px;">'
+            f'최근 {overheat_n}봉 누적 {overheat_thr}% 미만</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
     # ── 섹션 1: 일봉 분석 ────────────────────────────────────────────────────
     col1, col2 = st.columns([1, 2])
     with col1:
