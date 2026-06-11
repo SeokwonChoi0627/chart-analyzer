@@ -148,9 +148,9 @@ section[data-testid="stSidebar"] * {
 @media (min-width: 769px) {
     section[data-testid="stSidebar"] {
         transform: none !important;
-        width: 240px !important;
-        min-width: 240px !important;
-        max-width: 240px !important;
+        width: 360px !important;
+        min-width: 360px !important;
+        max-width: 360px !important;
         overflow-x: hidden !important;
     }
     div[data-testid="stSidebarCollapseButton"] {
