@@ -52,3 +52,25 @@ def test_rebound_in_downtrend_notes_attempt():
 def test_insufficient_data_returns_none():
     assert _brief_from_closes([100.0] * 10) is None
     assert _brief_from_closes([]) is None
+
+
+def test_explicit_prev_close_fixes_missing_bar_gap():
+    """어제 봉이 결손(None 필터)이어도 공식 전일 종가로 정확한 등락률.
+
+    실사례: KOSPI 06-10 봉 None → closes[-2]가 그저께(8096.93)로 밀려
+    -4.11%로 오계산. 실제 전일 종가 7730.7 기준 +0.43%가 맞다.
+    """
+    closes = [8000.0] * 58 + [8096.93, 7763.95]
+    brief = _brief_from_closes(closes, prev_close=7730.7)
+    assert brief["change_pct"] == 0.43
+
+
+def test_explicit_value_overrides_last_close():
+    brief = _brief_from_closes([100.0] * 60, value=105.0, prev_close=100.0)
+    assert brief["value"] == 105.0
+    assert brief["change_pct"] == 5.0
+
+
+def test_without_explicit_args_falls_back_to_closes():
+    closes = [100.0] * 59 + [102.0]
+    assert _brief_from_closes(closes)["change_pct"] == 2.0
