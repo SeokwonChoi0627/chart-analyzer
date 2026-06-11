@@ -20,3 +20,9 @@ def test_unset_expected_always_fails():
 
 def test_empty_input_fails():
     assert verify_password("", "secret123") is False
+
+
+def test_korean_password_supported():
+    """hmac.compare_digest는 비ASCII 문자열을 거부 — bytes 비교 필요."""
+    assert verify_password("펭귄1!", "펭귄1!") is True
+    assert verify_password("펭귄2!", "펭귄1!") is False

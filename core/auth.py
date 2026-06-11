@@ -9,4 +9,5 @@ def verify_password(raw: str, expected: str | None) -> bool:
     candidate = (raw or "").strip()
     if not candidate:
         return False
-    return hmac.compare_digest(candidate, expected)
+    # compare_digest는 비ASCII str을 거부하므로 bytes로 비교 (한글 비밀번호 지원)
+    return hmac.compare_digest(candidate.encode("utf-8"), expected.encode("utf-8"))
