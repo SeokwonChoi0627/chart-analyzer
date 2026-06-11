@@ -1,6 +1,6 @@
 from datetime import date
 import pandas as pd
-from .base import detect_market, OHLCV_COLUMNS
+from .base import clean_ohlcv, detect_market, OHLCV_COLUMNS
 from .mirae import MiraeProvider
 from .yfinance_us import YFinanceProvider
 from .pykrx_kr import PykrxProvider
@@ -16,20 +16,21 @@ def fetch(symbol: str, period_days: int, cache: OhlcvCache) -> tuple[pd.DataFram
     symbol = symbol.strip()
     market = detect_market(symbol)
 
-    cached = cache.load(symbol, max_age_date=date.today())
+    # 캐시에 이미 미완성 봉(close NaN)이 저장됐을 수 있어 로드 후에도 정화
+    cached = clean_ohlcv(cache.load(symbol, max_age_date=date.today()))
     if cached is not None and not cached.empty:
         return cached, "캐시"
 
     mirae = MiraeProvider()
     if mirae.is_available():
-        df = mirae.fetch_ohlcv(symbol, period_days)
+        df = clean_ohlcv(mirae.fetch_ohlcv(symbol, period_days))
         if not df.empty:
             cache.save(symbol, df)
             return df, "미래에셋"
 
     provider = PykrxProvider() if market == "KR" else YFinanceProvider()
     source = "pykrx" if market == "KR" else "yfinance"
-    df = provider.fetch_ohlcv(symbol, period_days)
+    df = clean_ohlcv(provider.fetch_ohlcv(symbol, period_days))
     if not df.empty:
         cache.save(symbol, df)
         return df, source
