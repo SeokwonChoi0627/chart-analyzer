@@ -148,12 +148,24 @@ section[data-testid="stSidebar"] * {
 @media (min-width: 769px) {
     section[data-testid="stSidebar"] {
         transform: none !important;
-        min-width: 320px !important;
-        width: 320px !important;
+        min-width: 260px !important;
+        width: 260px !important;
     }
     div[data-testid="stSidebarCollapseButton"] {
         display: none !important;
     }
+}
+
+/* ── 사이드바 내부 컨테이너 전체 너비 채우기 ── */
+section[data-testid="stSidebar"] > div,
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"],
+section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+}
+section[data-testid="stSidebar"] * {
+    box-sizing: border-box !important;
 }
 
 /* ── 모바일 전용 ── */
@@ -188,8 +200,11 @@ section[data-testid="stSidebar"] * {
 
 /* ── 사이드바 모드 선택: 버튼 스타일 + 호버 글로우 ── */
 section[data-testid="stSidebar"] div[role="radiogroup"] {
-    flex-direction: column;
-    gap: 8px;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label {
     background: #ffffff;
@@ -197,7 +212,9 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label {
     border-radius: 12px;
     padding: 11px 16px !important;
     margin: 0 !important;
-    width: 100%;
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease,
                 box-shadow 0.15s ease, transform 0.1s ease;
