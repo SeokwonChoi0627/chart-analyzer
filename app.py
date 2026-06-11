@@ -377,13 +377,13 @@ def main():
         st.markdown('<div style="margin-bottom:28px;"></div>', unsafe_allow_html=True)
         mode = st.radio(
             "분석 모드",
-            ["📈 단일 종목", "🔍 관심종목 스크리너", "💼 내 포트폴리오"],
+            ["단일종목분석", "여러종목분석", "포트폴리오"],
             label_visibility="collapsed",
-        ).split(" ", 1)[1]
+        )
         symbol_sb, run_sb = "", False
         watchlist_raw, run_screener = "", False
         entry_raw = ""
-        if mode == "단일 종목":
+        if mode == "단일종목분석":
             with st.form("analysis_form"):
                 symbol_sb = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
                 entry_raw = st.text_input(
@@ -391,7 +391,7 @@ def main():
                     placeholder="예: 298500 — 미보유 시 비워두세요",
                 )
                 run_sb = st.form_submit_button("분석 실행", use_container_width=True)
-        elif mode == "관심종목 스크리너":
+        elif mode == "여러종목분석":
             with st.form("screener_form"):
                 watchlist_raw = st.text_area(
                     "관심종목 (줄바꿈 또는 쉼표 구분)",
@@ -481,7 +481,7 @@ def main():
         )
 
     # ── 내 포트폴리오 모드 ───────────────────────────────────────────────────
-    if mode == "내 포트폴리오":
+    if mode == "포트폴리오":
         st.markdown(
             '<div style="font-size:22px;font-weight:700;color:#1d1d1f;'
             'letter-spacing:-0.4px;margin:8px 0 14px;'
@@ -532,7 +532,7 @@ def main():
         return
 
     # ── 관심종목 스크리너 모드 ────────────────────────────────────────────────
-    if mode == "관심종목 스크리너":
+    if mode == "여러종목분석":
         st.markdown(
             '<div style="font-size:22px;font-weight:700;color:#1d1d1f;'
             'letter-spacing:-0.4px;margin:8px 0 14px;'
@@ -791,8 +791,8 @@ def main():
         if last_close is not None:
             entry_price = _parse_entry_price(entry_raw)
             if entry_price > 0:
-                # 보유 포지션: 매수가 고정 손절/목표 + 트레일링 스탑
-                trailing = trailing_stop_from_df(enriched)
+                # 보유 포지션: 매수가 고정 손절/목표 + 트레일링 스탑 (매수 시점 이후 고점 기준)
+                trailing = trailing_stop_from_df(enriched, entry=entry_price)
                 pos = evaluate_position(
                     entry=entry_price, current=float(last_close),
                     atr=daily_atr, trailing_stop=trailing,

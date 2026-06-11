@@ -42,17 +42,31 @@ def compute_risk_levels(entry: float, atr: float) -> dict | None:
 
 
 def trailing_stop_from_df(df: pd.DataFrame, lookback: int = TRAIL_LOOKBACK,
-                          atr_mult: float = TRAIL_ATR_MULT) -> float | None:
-    """샹들리에 엑시트: 최근 lookback봉 최고가 − atr_mult × 현재 ATR.
+                          atr_mult: float = TRAIL_ATR_MULT,
+                          entry: float | None = None) -> float | None:
+    """샹들리에 엑시트: 보유 기간 최고가 − atr_mult × 현재 ATR.
 
     주가가 오르면 청산선도 따라 올라가 이익을 보호한다 (위로만 이동).
+
+    entry 전달 시: 매수가가 마지막으로 거래된 봉(low ≤ entry ≤ high) 이후의
+    고점만 사용한다. 매수 전에 생긴 고점은 내 보유 손익과 무관하므로,
+    방금 매수한 포지션이 직전 급락 때문에 즉시 '청산'으로 뜨는 오판을 막는다.
+    매수가가 데이터 범위에서 거래된 적 없으면 lookback 창으로 폴백.
     """
     if df is None or df.empty or "high" not in df.columns or "atr" not in df.columns:
         return None
     atr = df["atr"].iloc[-1]
     if pd.isna(atr) or float(atr) <= 0:
         return None
-    highs = df["high"].dropna().tail(lookback)
+
+    highs_all = df["high"].dropna()
+    highs = None
+    if entry is not None and entry > 0 and "low" in df.columns:
+        touched = df[(df["low"] <= entry) & (df["high"] >= entry)]
+        if not touched.empty:
+            highs = highs_all.loc[touched.index[-1]:]
+    if highs is None:
+        highs = highs_all.tail(lookback)
     if highs.empty:
         return None
     return round(float(highs.max()) - atr_mult * float(atr), 4)

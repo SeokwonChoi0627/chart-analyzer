@@ -69,7 +69,7 @@ def analyze_positions(positions: list[dict],
 
             atr_val = enriched["atr"].iloc[-1]
             atr = float(atr_val) if pd.notna(atr_val) else 0.0
-            trailing = trailing_stop_from_df(enriched)
+            trailing = trailing_stop_from_df(enriched, entry=pos["entry_price"])
             evaluated = evaluate_position(
                 entry=pos["entry_price"], current=current,
                 atr=atr, trailing_stop=trailing,

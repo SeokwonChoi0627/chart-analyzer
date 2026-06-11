@@ -68,6 +68,39 @@ def test_trailing_stop_invalid_inputs():
     assert trailing_stop_from_df(df) is None
 
 
+def _entry_anchor_df():
+    """250 횡보 → 370 급등 → 300 터치하며 하락 → 290대 시나리오."""
+    rows = []
+    rows += [(250, 252, 248)] * 5    # close, high, low
+    rows += [(370, 372, 368)] * 10   # 고점 372
+    rows += [(300, 305, 295)]        # 300이 마지막으로 거래된 봉 (high 305)
+    rows += [(292, 295, 290)] * 4    # 이후 300 미터치
+    idx = pd.date_range("2026-01-01", periods=len(rows), freq="D")
+    return pd.DataFrame({
+        "open": [r[0] for r in rows], "high": [r[1] for r in rows],
+        "low": [r[2] for r in rows], "close": [r[0] for r in rows],
+        "volume": [1000] * len(rows), "atr": [5.0] * len(rows),
+    }, index=idx)
+
+
+def test_trailing_anchored_to_entry_ignores_pre_entry_high():
+    """매수가(300)가 마지막으로 거래된 봉 이후 고점(305)만 기준 —
+    매수 전 고점(372)은 내 보유 기간이 아니므로 제외."""
+    df = _entry_anchor_df()
+    assert trailing_stop_from_df(df, entry=300) == 290.0   # 305 − 3×5
+
+
+def test_trailing_old_entry_keeps_ride_high():
+    """과거 저점(250)에 매수해 급등을 경험한 경우 — 370 고점 유지."""
+    df = _entry_anchor_df()
+    assert trailing_stop_from_df(df, entry=250) == 357.0   # 372 − 3×5
+
+
+def test_trailing_entry_never_traded_falls_back_to_lookback():
+    df = _entry_anchor_df()
+    assert trailing_stop_from_df(df, entry=9999) == 357.0  # lookback 폴백
+
+
 # ── evaluate_position (보유 포지션 평가) ──────────────────────────────────────
 
 def test_position_pnl_and_fixed_levels():
