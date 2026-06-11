@@ -148,24 +148,51 @@ section[data-testid="stSidebar"] * {
 @media (min-width: 769px) {
     section[data-testid="stSidebar"] {
         transform: none !important;
-        min-width: 260px !important;
-        width: 260px !important;
+        width: 240px !important;
+        min-width: 240px !important;
+        max-width: 240px !important;
+        overflow-x: hidden !important;
     }
     div[data-testid="stSidebarCollapseButton"] {
         display: none !important;
     }
 }
 
-/* ── 사이드바 내부 컨테이너 전체 너비 채우기 ── */
+/* ── 사이드바 전체 overflow 차단 + 콘텐츠 너비 강제 ── */
+section[data-testid="stSidebar"],
 section[data-testid="stSidebar"] > div,
 section[data-testid="stSidebar"] [data-testid="stSidebarContent"],
-section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
+section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
     width: 100% !important;
-    box-sizing: border-box !important;
+    max-width: 100% !important;
     min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
 }
+
+/* ── 사이드바 내 모든 요소 너비 제한 ── */
 section[data-testid="stSidebar"] * {
     box-sizing: border-box !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* ── 사이드바 내 Streamlit 폼 요소 너비 강제 ── */
+section[data-testid="stSidebar"] .stTextInput,
+section[data-testid="stSidebar"] .stTextInput > div,
+section[data-testid="stSidebar"] .stTextInput input,
+section[data-testid="stSidebar"] .stNumberInput,
+section[data-testid="stSidebar"] .stNumberInput > div,
+section[data-testid="stSidebar"] .stNumberInput input,
+section[data-testid="stSidebar"] .stButton,
+section[data-testid="stSidebar"] .stButton > button,
+section[data-testid="stSidebar"] [data-testid="stFormSubmitButton"],
+section[data-testid="stSidebar"] [data-testid="stFormSubmitButton"] > button,
+section[data-testid="stSidebar"] .element-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
 }
 
 /* ── 모바일 전용 ── */
