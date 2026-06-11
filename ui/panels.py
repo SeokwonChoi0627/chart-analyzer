@@ -412,8 +412,93 @@ def render_risk_card(risk: dict | None, entry: float, market: str) -> None:
         f'</div>'
         f'{rows_html}'
         f'<div style="font-size:11px;color:#aaa;margin-top:8px;line-height:1.5;">'
-        f'손절 = 진입가 − 2×ATR · 목표 = 진입가 + 3~4×ATR<br>'
-        f'매수 시 손절가 이탈하면 기계적으로 청산하세요. 출구 규칙이 수익을 지킵니다.'
+        f'⚠️ <b>오늘 신규 진입 가정</b> 기준선 — 매일 현재가 따라 변합니다.<br>'
+        f'이미 보유 중이면 사이드바에 <b>매수가</b>를 입력하세요. '
+        f'손절·목표가 매수가 기준으로 고정됩니다.'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ── 보유 포지션 카드 (매수가 고정 + 트레일링 스탑) ────────────────────────────
+
+_POSITION_STATUS_CFG = {
+    "손절 이탈":     {"color": "#c62828", "bg": "#fff5f5", "border": "#ef9a9a"},
+    "이익보호 청산": {"color": "#e65100", "bg": "#fff8f0", "border": "#ffcc80"},
+    "1차 목표 도달": {"color": "#2e7d32", "bg": "#f5fbf5", "border": "#c8e6c9"},
+    "2차 목표 도달": {"color": "#0a8a0a", "bg": "#f0faf0", "border": "#a5d6a7"},
+    "보유 유지":     {"color": "#0066cc", "bg": "#f0f6ff", "border": "#bbd6f7"},
+}
+
+_POSITION_GUIDE = {
+    "손절 이탈":     "권장 청산선 아래로 이탈 — 기계적 청산을 권장합니다. 미루면 손실이 커집니다.",
+    "이익보호 청산": "수익 구간이지만 최근 고점 대비 낙폭이 큽니다(트레일링 이탈) — 남은 수익을 지키는 청산을 권장합니다.",
+    "1차 목표 도달": "1차 목표 도달 — 절반 익절 후 나머지는 트레일링 스탑으로 끌고 가세요.",
+    "2차 목표 도달": "2차 목표 도달 — 전량 익절 또는 트레일링 스탑 이탈 시 청산하세요.",
+    "보유 유지":     "청산선과 목표 사이 — 권장 청산선 이탈 전까지 보유 유지.",
+}
+
+
+def render_position_card(pos: dict, entry: float, current: float, market: str) -> None:
+    """보유 포지션 평가 카드 — 매수가 고정 손절/목표 + 트레일링 스탑."""
+    status = pos["status"]
+    cfg = _POSITION_STATUS_CFG.get(status, _POSITION_STATUS_CFG["보유 유지"])
+    pnl = pos["pnl_pct"]
+    pnl_color = "#0a8a0a" if pnl >= 0 else "#c62828"
+
+    trailing = pos.get("trailing_stop")
+    eff = pos["effective_stop"]
+    eff_src = "트레일링" if (trailing is not None and eff == round(trailing, 4)
+                             and eff != pos["stop"]) else "고정 손절"
+
+    rows = [
+        ("내 매수가", entry, "#636366", ""),
+        ("권장 청산선", eff, "#c62828", f"{eff_src} 기준"),
+        ("1차 목표", pos["target1"], "#2e7d32",
+         f"매수가 {pos['target1_pct']:+.1f}%"),
+        ("2차 목표", pos["target2"], "#0a8a0a",
+         f"매수가 {pos['target2_pct']:+.1f}%"),
+    ]
+    if trailing is not None and eff_src == "고정 손절":
+        rows.insert(2, ("트레일링 스탑", trailing, "#8e6d00", "최근 고점 − 3×ATR"))
+
+    rows_html = ""
+    for label, price, color, note in rows:
+        note_html = (f'<span style="font-size:10px;color:#aaa;margin-left:8px;">{note}</span>'
+                     if note else "")
+        rows_html += (
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:center;padding:7px 0;border-bottom:1px solid #f0f0f3;">'
+            f'<span style="font-size:13px;color:#636366;">{label}</span>'
+            f'<span style="text-align:right;">'
+            f'<span style="font-size:15px;font-weight:600;color:{color};">'
+            f'{_fmt_price(price, market)}</span>{note_html}'
+            f'</span></div>'
+        )
+
+    st.markdown(
+        f'<div style="background:{cfg["bg"]};border:1.5px solid {cfg["border"]};'
+        f'border-radius:14px;padding:18px 20px 14px;margin-bottom:12px;'
+        f'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+        f'margin-bottom:4px;">'
+        f'<span style="font-size:11px;font-weight:600;color:#aaa;'
+        f'letter-spacing:0.6px;text-transform:uppercase;">보유 포지션 평가</span>'
+        f'<span style="font-size:12px;font-weight:700;color:#ffffff;'
+        f'background:{cfg["color"]};padding:3px 12px;border-radius:9999px;">{status}</span>'
+        f'</div>'
+        f'<div style="margin:6px 0 10px;">'
+        f'<span style="font-size:13px;color:#636366;">현재 수익률</span>'
+        f'<span style="font-size:22px;font-weight:700;color:{pnl_color};'
+        f'margin-left:10px;">{pnl:+.2f}%</span>'
+        f'</div>'
+        f'{rows_html}'
+        f'<div style="font-size:11.5px;color:{cfg["color"]};font-weight:600;'
+        f'margin-top:8px;line-height:1.5;">{_POSITION_GUIDE.get(status, "")}</div>'
+        f'<div style="font-size:10.5px;color:#aaa;margin-top:4px;line-height:1.5;">'
+        f'손절·목표는 매수가 기준 고정 · 트레일링 스탑은 주가 상승 시 위로만 이동 '
+        f'(권장 청산선 = 둘 중 높은 쪽)'
         f'</div>'
         f'</div>',
         unsafe_allow_html=True,

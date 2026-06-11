@@ -13,7 +13,7 @@ from core.indicators import compute_all
 from core.signals import generate_signal, generate_intraday_signal, is_overheated
 from core.market_sentiment import fetch_10y_yield, fetch_fear_greed, rating_ko
 from core.regime import WEIGHTED_REGIMES, detect_regime
-from core.risk import compute_risk_levels
+from core.risk import compute_risk_levels, evaluate_position, trailing_stop_from_df
 from core.backtest import run_backtest
 from core.screener import scan_symbols
 from core.context import sentiment_context, valuation_warning
@@ -21,8 +21,17 @@ from ui.chart import build_chart, build_intraday_chart
 from ui.panels import (
     render_signal_card, render_reasons_table, render_intraday_panel,
     render_entry_point_card, render_risk_card, render_regime_badge,
-    render_backtest_section, render_screener_table,
+    render_backtest_section, render_screener_table, render_position_card,
 )
+
+
+def _parse_entry_price(raw: str) -> float:
+    """매수가 입력 파싱: '298,500' → 298500.0. 비어있거나 무효면 0."""
+    try:
+        value = float(raw.replace(",", "").strip())
+        return value if value > 0 else 0.0
+    except (ValueError, AttributeError):
+        return 0.0
 
 _MAX_SCREENER_SYMBOLS = 20
 
@@ -318,9 +327,14 @@ def main():
         )
         symbol_sb, run_sb = "", False
         watchlist_raw, run_screener = "", False
+        entry_raw = ""
         if mode == "단일 종목":
             with st.form("analysis_form"):
                 symbol_sb = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
+                entry_raw = st.text_input(
+                    "내 매수가 (보유 시)",
+                    placeholder="예: 298500 — 미보유 시 비워두세요",
+                )
                 run_sb = st.form_submit_button("분석 실행", use_container_width=True)
         else:
             with st.form("screener_form"):
@@ -638,8 +652,22 @@ def main():
     with col1:
         render_signal_card(signal, source, analyzed_at)
         if last_close is not None:
-            risk = compute_risk_levels(entry=float(last_close), atr=daily_atr)
-            render_risk_card(risk, float(last_close), market)
+            entry_price = _parse_entry_price(entry_raw)
+            if entry_price > 0:
+                # 보유 포지션: 매수가 고정 손절/목표 + 트레일링 스탑
+                trailing = trailing_stop_from_df(enriched)
+                pos = evaluate_position(
+                    entry=entry_price, current=float(last_close),
+                    atr=daily_atr, trailing_stop=trailing,
+                )
+                if pos:
+                    render_position_card(pos, entry_price, float(last_close), market)
+                else:
+                    st.caption("입력한 매수가로 포지션을 평가할 수 없습니다. 매수가를 확인하세요.")
+            else:
+                # 미보유: 오늘 신규 진입 가정 기준선
+                risk = compute_risk_levels(entry=float(last_close), atr=daily_atr)
+                render_risk_card(risk, float(last_close), market)
         render_reasons_table(signal)
     with col2:
         st.plotly_chart(
