@@ -531,10 +531,17 @@ def main():
 
         expected_pw = os.getenv("PORTFOLIO_PASSWORD", "")
         if not expected_pw:
+            try:
+                expected_pw = st.secrets.get("PORTFOLIO_PASSWORD", "")
+            except Exception:
+                expected_pw = ""
+        if not expected_pw:
             st.error(
                 "포트폴리오 비밀번호가 설정되지 않았습니다.\n\n"
-                "`C:\\AI\\chart_analyzer\\.env` 파일에 아래 한 줄을 추가하고 앱을 재시작하세요:\n\n"
-                "`PORTFOLIO_PASSWORD=원하는비밀번호`"
+                "**로컬 실행 시:** `C:\\AI\\chart_analyzer\\.env` 파일에 추가하세요:\n\n"
+                "`PORTFOLIO_PASSWORD=원하는비밀번호`\n\n"
+                "**Streamlit Cloud 배포 시:** 앱 대시보드 → Settings → Secrets에 추가하세요:\n\n"
+                "`PORTFOLIO_PASSWORD = \"원하는비밀번호\"`"
             )
             return
 
