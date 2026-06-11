@@ -168,11 +168,55 @@ section[data-testid="stSidebar"] * {
     .mobile-search { display: block !important; }
 }
 
-/* 데스크톱: 메인 컨텐츠 내 form 숨김 (사이드바 form은 별도 영역이라 영향 없음) */
+/* 데스크톱: 모바일 검색 폼만 숨김 — 로그인 폼 등 다른 main 폼은 표시 */
 @media (min-width: 769px) {
-    div[data-testid="stMainBlockContainer"] [data-testid="stForm"] {
+    div[data-testid="stMainBlockContainer"] .st-key-mobile_form {
         display: none !important;
     }
+}
+
+/* ── 사이드바 모드 선택: 버튼 스타일 + 호버 글로우 ── */
+section[data-testid="stSidebar"] div[role="radiogroup"] {
+    flex-direction: column;
+    gap: 8px;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label {
+    background: #ffffff;
+    border: 1px solid #d1d1d6;
+    border-radius: 12px;
+    padding: 11px 16px !important;
+    margin: 0 !important;
+    width: 100%;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease,
+                box-shadow 0.15s ease, transform 0.1s ease;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+    border-color: #0066cc;
+    background: #f0f6ff;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.18),
+                0 2px 12px rgba(0, 102, 204, 0.15);
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:active {
+    transform: scale(0.97);
+}
+/* 라디오 동그라미 숨김 */
+section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-of-type {
+    display: none;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label p {
+    font-size: 14px;
+    color: #1d1d1f;
+}
+/* 선택된 모드 버튼 강조 */
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
+    background: #0066cc;
+    border-color: #0066cc;
+    box-shadow: 0 2px 10px rgba(0, 102, 204, 0.3);
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p {
+    color: #ffffff;
+    font-weight: 600;
 }
 
 /* ── 메인 타이틀 ── */
@@ -333,10 +377,9 @@ def main():
         st.markdown('<div style="margin-bottom:28px;"></div>', unsafe_allow_html=True)
         mode = st.radio(
             "분석 모드",
-            ["단일 종목", "관심종목 스크리너", "내 포트폴리오"],
-            horizontal=True,
+            ["📈 단일 종목", "🔍 관심종목 스크리너", "💼 내 포트폴리오"],
             label_visibility="collapsed",
-        )
+        ).split(" ", 1)[1]
         symbol_sb, run_sb = "", False
         watchlist_raw, run_screener = "", False
         entry_raw = ""
