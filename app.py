@@ -39,7 +39,8 @@ def _parse_entry_price(raw: str) -> float:
 
 _MAX_SCREENER_SYMBOLS = 20
 
-load_dotenv()
+# override=True: 앱 실행 중 .env를 수정해도 새로고침 시 즉시 반영
+load_dotenv(override=True)
 
 st.set_page_config(
     page_title="차트 분석기",
