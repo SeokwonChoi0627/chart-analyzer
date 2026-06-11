@@ -608,3 +608,122 @@ def render_screener_table(results: list[dict], market_fmt: str = "KR") -> None:
         with st.expander(f"조회 실패 {len(failed)}건", expanded=False):
             for r in failed:
                 st.caption(f"**{r['symbol']}** — {r['error']}")
+
+
+# ── 내 포트폴리오 대시보드 ────────────────────────────────────────────────────
+
+_PNL_GREEN = "#0a8a0a"
+_PNL_RED = "#c62828"
+
+_PF_STATUS_COLOR = {
+    "손절 이탈":     "#c62828",
+    "이익보호 청산": "#e65100",
+    "2차 목표 도달": "#0a8a0a",
+    "1차 목표 도달": "#2e7d32",
+    "보유 유지":     "#0066cc",
+    "조회 실패":     "#9e9e9e",
+}
+
+
+def _money(v: float | None, market: str) -> str:
+    if v is None:
+        return "—"
+    return f"{v:,.0f}원" if market == "KR" else f"${v:,.2f}"
+
+
+def render_portfolio_summary(summary: dict) -> None:
+    """통화(시장)별 매입/평가/손익 요약 카드."""
+    if not summary:
+        st.caption("수량이 입력된 포지션이 없어 금액 합산을 건너뜁니다. (수익률은 아래 표 참고)")
+        return
+
+    market_label = {"KR": "국내 (원화)", "US": "미국 (달러)"}
+    cards = ""
+    for market, s in summary.items():
+        pnl_color = _PNL_GREEN if s["pnl"] >= 0 else _PNL_RED
+        cards += (
+            f'<div style="flex:1;min-width:240px;background:#ffffff;'
+            f'border:1px solid rgba(0,0,0,0.08);border-radius:14px;'
+            f'padding:16px 20px;">'
+            f'<div style="font-size:11px;font-weight:600;color:#aaa;'
+            f'letter-spacing:0.5px;margin-bottom:8px;">{market_label.get(market, market)}</div>'
+            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
+            f'<span style="font-size:12px;color:#636366;">매입금액</span>'
+            f'<span style="font-size:13px;font-weight:600;color:#1d1d1f;">{_money(s["invested"], market)}</span>'
+            f'</div>'
+            f'<div style="display:flex;justify-content:space-between;margin-bottom:8px;">'
+            f'<span style="font-size:12px;color:#636366;">평가금액</span>'
+            f'<span style="font-size:13px;font-weight:600;color:#1d1d1f;">{_money(s["value"], market)}</span>'
+            f'</div>'
+            f'<div style="border-top:1px solid #f0f0f3;padding-top:8px;'
+            f'display:flex;justify-content:space-between;align-items:center;">'
+            f'<span style="font-size:12px;color:#636366;">평가손익</span>'
+            f'<span style="font-size:18px;font-weight:700;color:{pnl_color};">'
+            f'{_money(s["pnl"], market)}'
+            f'<span style="font-size:12px;margin-left:6px;">({s["pnl_pct"]:+.2f}%)</span>'
+            f'</span></div>'
+            f'</div>'
+        )
+    st.markdown(
+        f'<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;'
+        f'font-family:system-ui,-apple-system,sans-serif;">{cards}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_portfolio_table(rows: list[dict]) -> None:
+    """포지션별 분석 카드 목록 — 위험한 상태부터."""
+    ok_rows = [r for r in rows if r["error"] is None]
+    failed = [r for r in rows if r["error"] is not None]
+
+    if not ok_rows and not failed:
+        st.info("등록된 포지션이 없습니다.")
+        return
+
+    for r in ok_rows:
+        m = r["market"]
+        status_color = _PF_STATUS_COLOR.get(r["status"], "#9e9e9e")
+        pnl_color = _PNL_GREEN if (r["pnl_pct"] or 0) >= 0 else _PNL_RED
+        score = r["score"] or 0.0
+        qty_note = (f' · {r["quantity"]:g}주' if r["quantity"] else "")
+
+        st.markdown(
+            f'<div style="background:#ffffff;border:1px solid rgba(0,0,0,0.08);'
+            f'border-left:4px solid {status_color};border-radius:12px;'
+            f'padding:14px 18px;margin-bottom:10px;'
+            f'font-family:system-ui,-apple-system,sans-serif;">'
+            # 1행: 종목 + 상태
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'margin-bottom:8px;">'
+            f'<span style="font-size:16px;font-weight:700;color:#1d1d1f;">'
+            f'{r["symbol"]}'
+            f'<span style="font-size:11px;font-weight:500;color:#aaa;margin-left:8px;">'
+            f'매수가 {_money(r["entry_price"], m)}{qty_note}</span></span>'
+            f'<span style="font-size:12px;font-weight:700;color:#ffffff;'
+            f'background:{status_color};padding:3px 12px;border-radius:9999px;">'
+            f'{r["status"]}</span>'
+            f'</div>'
+            # 2행: 수치 그리드
+            f'<div style="display:flex;gap:20px;flex-wrap:wrap;">'
+            f'<div><div style="font-size:10px;color:#aaa;">현재가</div>'
+            f'<div style="font-size:14px;font-weight:600;color:#1d1d1f;">{_money(r["current"], m)}</div></div>'
+            f'<div><div style="font-size:10px;color:#aaa;">수익률</div>'
+            f'<div style="font-size:14px;font-weight:700;color:{pnl_color};">{r["pnl_pct"]:+.2f}%</div></div>'
+            f'<div><div style="font-size:10px;color:#aaa;">매수추천도</div>'
+            f'<div style="font-size:14px;font-weight:600;color:#1d1d1f;">'
+            f'{r["verdict"]} <span style="font-size:11px;color:#aaa;">({score:+.1f})</span></div></div>'
+            f'<div><div style="font-size:10px;color:#aaa;">권장 청산선</div>'
+            f'<div style="font-size:14px;font-weight:700;color:#c62828;">{_money(r["effective_stop"], m)}</div></div>'
+            f'<div><div style="font-size:10px;color:#aaa;">1차 목표</div>'
+            f'<div style="font-size:14px;font-weight:600;color:#2e7d32;">{_money(r["target1"], m)}</div></div>'
+            f'<div><div style="font-size:10px;color:#aaa;">국면</div>'
+            f'<div style="font-size:14px;font-weight:600;color:#636366;">{r["regime"]}</div></div>'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    if failed:
+        with st.expander(f"조회 실패 {len(failed)}건", expanded=False):
+            for r in failed:
+                st.caption(f"**{r['symbol']}** (매수가 {r['entry_price']:,.0f}) — {r['error']}")
