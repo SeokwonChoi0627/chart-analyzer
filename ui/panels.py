@@ -686,6 +686,9 @@ def render_portfolio_table(rows: list[dict]) -> None:
         pnl_color = _PNL_GREEN if (r["pnl_pct"] or 0) >= 0 else _PNL_RED
         score = r["score"] or 0.0
         qty_note = (f' · {r["quantity"]:g}주' if r["quantity"] else "")
+        lots = r.get("lots", 1)
+        entry_label = "평단" if lots > 1 else "매수가"
+        lot_note = f' · {lots}건 합산' if lots > 1 else ""
 
         st.markdown(
             f'<div style="background:#ffffff;border:1px solid rgba(0,0,0,0.08);'
@@ -698,7 +701,7 @@ def render_portfolio_table(rows: list[dict]) -> None:
             f'<span style="font-size:16px;font-weight:700;color:#1d1d1f;">'
             f'{r["symbol"]}'
             f'<span style="font-size:11px;font-weight:500;color:#aaa;margin-left:8px;">'
-            f'매수가 {_money(r["entry_price"], m)}{qty_note}</span></span>'
+            f'{entry_label} {_money(r["entry_price"], m)}{qty_note}{lot_note}</span></span>'
             f'<span style="font-size:12px;font-weight:700;color:#ffffff;'
             f'background:{status_color};padding:3px 12px;border-radius:9999px;">'
             f'{r["status"]}</span>'

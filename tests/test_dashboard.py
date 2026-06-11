@@ -1,6 +1,6 @@
 import pandas as pd
 
-from core.dashboard import analyze_positions, summarize
+from core.dashboard import analyze_positions, merge_positions, summarize
 
 
 def _make_df(closes):
@@ -82,3 +82,63 @@ def test_summarize_skips_zero_quantity_and_errors():
         fetch_fn=_fake_fetch,
     )
     assert summarize(rows) == {}
+
+
+# ── merge_positions: 동일 종목 물타기 병합 ────────────────────────────────────
+
+def test_merge_same_symbol_weighted_average():
+    lots = [_pos("UP", entry=100, qty=10, pid=1),
+            _pos("UP", entry=200, qty=10, pid=2)]
+    merged = merge_positions(lots)
+    assert len(merged) == 1
+    assert merged[0]["entry_price"] == 150.0   # (100×10 + 200×10) / 20
+    assert merged[0]["quantity"] == 20
+    assert merged[0]["lots"] == 2
+
+
+def test_merge_weighted_by_unequal_quantity():
+    lots = [_pos("UP", entry=100, qty=30, pid=1),
+            _pos("UP", entry=200, qty=10, pid=2)]
+    merged = merge_positions(lots)[0]
+    assert merged["entry_price"] == 125.0      # (3000 + 2000) / 40
+
+
+def test_merge_without_quantity_uses_simple_mean():
+    lots = [_pos("UP", entry=100, qty=0, pid=1),
+            _pos("UP", entry=200, qty=0, pid=2)]
+    merged = merge_positions(lots)[0]
+    assert merged["entry_price"] == 150.0
+    assert merged["quantity"] == 0
+
+
+def test_merge_mixed_quantity_falls_back_to_simple_mean():
+    """일부 lot만 수량 입력 — 가중평균 불가, 단순 평균 + 입력된 수량 합."""
+    lots = [_pos("UP", entry=100, qty=10, pid=1),
+            _pos("UP", entry=200, qty=0, pid=2)]
+    merged = merge_positions(lots)[0]
+    assert merged["entry_price"] == 150.0
+    assert merged["quantity"] == 10
+
+
+def test_different_symbols_not_merged():
+    lots = [_pos("UP", entry=100, pid=1), _pos("DOWN", entry=300, pid=2)]
+    assert len(merge_positions(lots)) == 2
+
+
+def test_single_lot_passes_through():
+    merged = merge_positions([_pos("UP", entry=100, qty=5, pid=7)])
+    assert merged[0]["lots"] == 1
+    assert merged[0]["entry_price"] == 100
+    assert merged[0]["id"] == 7
+
+
+def test_analyze_merges_lots_into_single_row():
+    """물타기 2건 → 대시보드에는 평단 기준 1개 카드 (손절/목표 통합)."""
+    lots = [_pos("UP", entry=100, qty=10, pid=1),
+            _pos("UP", entry=200, qty=10, pid=2)]
+    rows = analyze_positions(lots, fetch_fn=_fake_fetch)
+    assert len(rows) == 1
+    assert rows[0]["entry_price"] == 150.0
+    assert rows[0]["quantity"] == 20
+    assert rows[0]["lots"] == 2
+    assert rows[0]["effective_stop"] is not None  # 평단 기준 통합 청산선

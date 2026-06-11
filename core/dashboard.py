@@ -24,12 +24,50 @@ _STATUS_ORDER = {
 }
 
 
+def merge_positions(positions: list[dict]) -> list[dict]:
+    """동일 종목의 분할 매수(물타기) lot들을 평균 단가 포지션 하나로 병합.
+
+    - 전 lot에 수량이 있으면 가중평균 단가 + 총 수량
+    - 수량이 없거나 일부만 있으면 단순 평균 단가 (수량은 입력된 것만 합산)
+    Returns: 병합된 포지션 목록 (각 항목에 "lots" = 병합된 건수 추가).
+    """
+    groups: dict[str, list[dict]] = {}
+    order: list[str] = []
+    for p in positions:
+        key = p["symbol"].strip()
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(p)
+
+    merged: list[dict] = []
+    for key in order:
+        lots = groups[key]
+        if len(lots) == 1:
+            merged.append({**lots[0], "lots": 1})
+            continue
+        total_qty = sum(lot.get("quantity") or 0 for lot in lots)
+        if all((lot.get("quantity") or 0) > 0 for lot in lots):
+            avg = sum(lot["entry_price"] * lot["quantity"] for lot in lots) / total_qty
+        else:
+            avg = sum(lot["entry_price"] for lot in lots) / len(lots)
+        merged.append({
+            "id":          lots[0]["id"],
+            "symbol":      key,
+            "entry_price": round(avg, 4),
+            "quantity":    total_qty,
+            "lots":        len(lots),
+        })
+    return merged
+
+
 def _error_row(pos: dict, message: str) -> dict:
     return {
         "id":             pos["id"],
         "symbol":         pos["symbol"],
         "entry_price":    pos["entry_price"],
         "quantity":       pos.get("quantity", 0),
+        "lots":           pos.get("lots", 1),
         "current":        None,
         "pnl_pct":        None,
         "verdict":        "—",
@@ -47,9 +85,9 @@ def _error_row(pos: dict, message: str) -> dict:
 
 def analyze_positions(positions: list[dict],
                       fetch_fn: Callable[[str], tuple[pd.DataFrame, str]]) -> list[dict]:
-    """등록 포지션 전체 분석. 같은 종목이 여러 행이어도 각각 평가."""
+    """등록 포지션 전체 분석. 같은 종목의 물타기 lot은 평단 기준 1건으로 병합."""
     rows: list[dict] = []
-    for pos in positions:
+    for pos in merge_positions(positions):
         try:
             df, source = fetch_fn(pos["symbol"])
             if df is None or df.empty:
@@ -82,6 +120,7 @@ def analyze_positions(positions: list[dict],
                 "symbol":         pos["symbol"],
                 "entry_price":    pos["entry_price"],
                 "quantity":       pos.get("quantity", 0),
+                "lots":           pos.get("lots", 1),
                 "current":        current,
                 "pnl_pct":        evaluated["pnl_pct"],
                 "verdict":        sig["verdict"],
