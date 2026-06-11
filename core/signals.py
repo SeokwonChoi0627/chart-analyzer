@@ -7,6 +7,13 @@ W_VOL    = 2.0
 W_RSI    = 1.5
 W_BB     = 1.0
 W_CANDLE = 1.5   # 캔들 패턴 (인걸프 ±1.5 / 망치·슈팅스타 ±1.05)
+W_DIV    = 1.5   # RSI 다이버전스 (강한 반전 선행 신호)
+
+# ── 국면별 가중치 배수 (추세장 → 추세지표 강화 / 횡보장 → 평균회귀 강화) ────────
+_REGIME_MULT: dict[str, dict[str, float]] = {
+    "추세장": {"이평선": 1.3, "MACD": 1.3, "RSI": 0.7, "볼린저밴드": 0.7},
+    "횡보장": {"이평선": 0.7, "MACD": 0.7, "RSI": 1.3, "볼린저밴드": 1.3},
+}
 
 # ── 15분봉 가중치 (최대 ±4.5) ─────────────────────────────────────────────────
 _W_INTRA_RSI    = 1.5
@@ -227,18 +234,94 @@ def _eval_vol(last, prev) -> tuple[float, str, str]:
     return 0.0, "중립", f"거래량 {vr:.1f}배 — 기준(1.5배) 미달"
 
 
+# ── RSI 다이버전스 감지 ───────────────────────────────────────────────────────
+
+def _find_extrema(values: list[float], order: int, find_peaks: bool) -> list[int]:
+    """국소 고점(find_peaks=True) 또는 저점 인덱스 목록.
+
+    좌측은 엄격 비교(>), 우측은 동등 허용(>=) — 평탄한 고점(같은 값 연속)에서
+    첫 번째 봉만 극값으로 잡아 중복 감지를 방지하기 위한 의도적 비대칭.
+    """
+    n = len(values)
+    extrema = []
+    for i in range(order, n - order):
+        left = values[i - order:i]
+        right = values[i + 1:i + order + 1]
+        if find_peaks:
+            if values[i] > max(left) and values[i] >= max(right):
+                extrema.append(i)
+        else:
+            if values[i] < min(left) and values[i] <= min(right):
+                extrema.append(i)
+    return extrema
+
+
+def detect_divergence(df: pd.DataFrame, lookback: int = 40,
+                      order: int = 2) -> tuple[float, str, str]:
+    """최근 lookback봉에서 주가-RSI 다이버전스 감지.
+
+    - 하락 다이버전스: 주가 고점↑ + RSI 고점↓ → 천장 경고 (-1.0)
+    - 상승 다이버전스: 주가 저점↓ + RSI 저점↑ → 바닥 신호 (+1.0)
+    Returns: (fraction, label, note). 실제 점수 = fraction × W_DIV.
+    """
+    if df.empty or "rsi" not in df.columns or "close" not in df.columns:
+        return 0.0, "중립", "RSI 데이터 없음 — 다이버전스 판별 불가"
+
+    sub = df.tail(lookback)[["close", "rsi"]].dropna()
+    if len(sub) < 2 * order + 3:
+        return 0.0, "중립", "데이터 부족 — 다이버전스 판별 불가"
+
+    closes = sub["close"].tolist()
+    rsi = sub["rsi"].tolist()
+
+    bearish = None  # (last_extreme_idx, note)
+    peaks = _find_extrema(closes, order, find_peaks=True)
+    if len(peaks) >= 2:
+        p1, p2 = peaks[-2], peaks[-1]
+        if closes[p2] > closes[p1] and rsi[p2] < rsi[p1]:
+            bearish = (p2,
+                       f"주가 고점 상승({closes[p1]:.0f}→{closes[p2]:.0f}) vs "
+                       f"RSI 고점 하락({rsi[p1]:.0f}→{rsi[p2]:.0f}) — 상승 동력 약화, 천장 경고")
+
+    bullish = None
+    troughs = _find_extrema(closes, order, find_peaks=False)
+    if len(troughs) >= 2:
+        t1, t2 = troughs[-2], troughs[-1]
+        if closes[t2] < closes[t1] and rsi[t2] > rsi[t1]:
+            bullish = (t2,
+                       f"주가 저점 하락({closes[t1]:.0f}→{closes[t2]:.0f}) vs "
+                       f"RSI 저점 상승({rsi[t1]:.0f}→{rsi[t2]:.0f}) — 하락 동력 약화, 바닥 신호")
+
+    # 둘 다 감지되면 더 최근에 완성된 쪽 우선
+    if bearish and bullish:
+        if bearish[0] >= bullish[0]:
+            bullish = None
+        else:
+            bearish = None
+
+    if bearish:
+        return -1.0, "하락 다이버전스", bearish[1]
+    if bullish:
+        return 1.0, "상승 다이버전스", bullish[1]
+    return 0.0, "중립", "주가-RSI 다이버전스 없음"
+
+
 # ── 일봉 종합 신호 ─────────────────────────────────────────────────────────────
 
-def generate_signal(df: pd.DataFrame) -> dict:
+def generate_signal(df: pd.DataFrame, regime: str | None = None) -> dict:
     """지표가 채워진 DataFrame의 마지막 행 기준 매수/매도 신호 생성.
-    모든 지표를 항상 reasons에 포함(점수 0도 표시)."""
+    모든 지표를 항상 reasons에 포함(점수 0도 표시).
+
+    regime: "추세장"/"횡보장" 전달 시 지표별 가중치 동적 보정.
+    """
     if df.empty:
-        return {"score": 0.0, "verdict": "중립/관망", "reasons": []}
+        return {"score": 0.0, "verdict": "중립/관망", "reasons": [], "regime": regime}
 
     last = df.iloc[-1]
     prev = df.iloc[-2] if len(df) >= 2 else last
     score = 0.0
     reasons: list[dict] = []
+    mult = _REGIME_MULT.get(regime or "", {})
 
     for label, result in [
         ("이평선",    _eval_ma(last, prev)),
@@ -248,6 +331,10 @@ def generate_signal(df: pd.DataFrame) -> dict:
         ("거래량",    _eval_vol(last, prev)),
     ]:
         s, sig, note = result
+        m = mult.get(label, 1.0)
+        if m != 1.0 and s != 0.0:
+            s = s * m
+            note += f" 〔{regime} 가중 ×{m}〕"
         score += s
         reasons.append({"indicator": label, "signal": sig,
                          "score": round(s, 2), "note": note})
@@ -258,7 +345,14 @@ def generate_signal(df: pd.DataFrame) -> dict:
     score += cs
     reasons.append({"indicator": "캔들패턴", "signal": sig, "score": cs, "note": note})
 
-    return {"score": round(score, 2), "verdict": classify(score), "reasons": reasons}
+    # RSI 다이버전스
+    frac, sig, note = detect_divergence(df)
+    ds = round(frac * W_DIV, 2)
+    score += ds
+    reasons.append({"indicator": "다이버전스", "signal": sig, "score": ds, "note": note})
+
+    return {"score": round(score, 2), "verdict": classify(score),
+            "reasons": reasons, "regime": regime}
 
 
 # ── 급등 과열 필터 ────────────────────────────────────────────────────────────

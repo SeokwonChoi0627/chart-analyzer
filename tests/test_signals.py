@@ -51,3 +51,33 @@ def test_reasons_have_required_keys():
     result = generate_signal(df)
     for r in result["reasons"]:
         assert set(r.keys()) == {"indicator", "signal", "score", "note"}
+
+
+def _reason_score(result: dict, indicator: str) -> float:
+    return next(r["score"] for r in result["reasons"] if r["indicator"] == indicator)
+
+
+def test_trend_regime_boosts_trend_indicators():
+    df = compute_all(_trend_up_df())
+    base = generate_signal(df)
+    trend = generate_signal(df, regime="추세장")
+    assert _reason_score(trend, "이평선") > _reason_score(base, "이평선")
+
+
+def test_range_regime_dampens_trend_indicators():
+    df = compute_all(_trend_up_df())
+    base = generate_signal(df)
+    ranged = generate_signal(df, regime="횡보장")
+    assert abs(_reason_score(ranged, "이평선")) < abs(_reason_score(base, "이평선"))
+
+
+def test_no_regime_keeps_original_scores():
+    df = compute_all(_trend_up_df())
+    assert generate_signal(df)["score"] == generate_signal(df, regime=None)["score"]
+
+
+def test_divergence_included_in_reasons():
+    df = compute_all(_trend_up_df())
+    result = generate_signal(df)
+    indicators = [r["indicator"] for r in result["reasons"]]
+    assert "다이버전스" in indicators

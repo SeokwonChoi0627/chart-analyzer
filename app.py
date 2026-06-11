@@ -12,8 +12,19 @@ from core.data.base import detect_market
 from core.indicators import compute_all
 from core.signals import generate_signal, generate_intraday_signal, is_overheated
 from core.market_sentiment import fetch_10y_yield, fetch_fear_greed, rating_ko
+from core.regime import WEIGHTED_REGIMES, detect_regime
+from core.risk import compute_risk_levels
+from core.backtest import run_backtest
+from core.screener import scan_symbols
+from core.context import sentiment_context, valuation_warning
 from ui.chart import build_chart, build_intraday_chart
-from ui.panels import render_signal_card, render_reasons_table, render_intraday_panel, render_entry_point_card
+from ui.panels import (
+    render_signal_card, render_reasons_table, render_intraday_panel,
+    render_entry_point_card, render_risk_card, render_regime_badge,
+    render_backtest_section, render_screener_table,
+)
+
+_MAX_SCREENER_SYMBOLS = 20
 
 load_dotenv()
 
@@ -299,9 +310,26 @@ def main():
     with st.sidebar:
         st.title("차트 분석기")
         st.markdown('<div style="margin-bottom:28px;"></div>', unsafe_allow_html=True)
-        with st.form("analysis_form"):
-            symbol_sb = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
-            run_sb = st.form_submit_button("분석 실행", use_container_width=True)
+        mode = st.radio(
+            "분석 모드",
+            ["단일 종목", "관심종목 스크리너"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        symbol_sb, run_sb = "", False
+        watchlist_raw, run_screener = "", False
+        if mode == "단일 종목":
+            with st.form("analysis_form"):
+                symbol_sb = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
+                run_sb = st.form_submit_button("분석 실행", use_container_width=True)
+        else:
+            with st.form("screener_form"):
+                watchlist_raw = st.text_area(
+                    "관심종목 (줄바꿈 또는 쉼표 구분)",
+                    placeholder="삼성전자\nSK하이닉스\nAAPL\nTSLA",
+                    height=140,
+                )
+                run_screener = st.form_submit_button("일괄 스캔", use_container_width=True)
         # ── 시장 심리 지표 ───────────────────────────────────────────────
         st.markdown("---")
         st.markdown(
@@ -352,6 +380,35 @@ def main():
             unsafe_allow_html=True,
         )
 
+    # ── 관심종목 스크리너 모드 ────────────────────────────────────────────────
+    if mode == "관심종목 스크리너":
+        st.markdown(
+            '<div style="font-size:22px;font-weight:700;color:#1d1d1f;'
+            'letter-spacing:-0.4px;margin:8px 0 14px;'
+            'font-family:system-ui,-apple-system,sans-serif;">관심종목 스크리너</div>',
+            unsafe_allow_html=True,
+        )
+        if not run_screener:
+            st.info("사이드바에 관심종목을 입력하고 '일괄 스캔'을 누르세요. 점수순으로 정렬해 보여드립니다.")
+            return
+
+        tokens = [t for line in watchlist_raw.splitlines() for t in line.split(",")]
+        symbols = [t.strip() for t in tokens if t.strip()][:_MAX_SCREENER_SYMBOLS]
+        if not symbols:
+            st.warning("종목을 한 개 이상 입력하세요.")
+            return
+
+        cache = get_cache()
+
+        def _fetch_for_scan(sym: str):
+            return fetch(sym, PERIOD_DAYS, cache)
+
+        with st.spinner(f"{len(symbols)}개 종목 스캔 중… (종목당 1~3초)"):
+            results = scan_symbols(symbols, fetch_fn=_fetch_for_scan)
+        render_screener_table(results)
+        st.caption("점수는 일봉 종합 신호(국면 가중 적용) 기준입니다. 상세 분석은 단일 종목 모드를 이용하세요.")
+        return
+
     # ── 모바일 상단 검색 폼 ───────────────────────────────────────────────────
     st.markdown('<div class="mobile-search">', unsafe_allow_html=True)
     with st.form("mobile_form"):
@@ -395,7 +452,15 @@ def main():
 
     market     = detect_market(symbol.strip())
     enriched   = compute_all(df)
-    signal     = generate_signal(enriched)
+    regime_info = detect_regime(enriched)
+    active_regime = regime_info["regime"] if regime_info["regime"] in WEIGHTED_REGIMES else None
+    signal     = generate_signal(enriched, regime=active_regime)
+    _atr_series = enriched.get("atr", pd.Series(dtype=float))
+    daily_atr = (
+        float(_atr_series.iloc[-1])
+        if hasattr(_atr_series, "iloc") and len(_atr_series) and pd.notna(_atr_series.iloc[-1])
+        else 0.0
+    )
     analyzed_at = now.strftime("%Y-%m-%d %H:%M:%S")
     chart_title = f"{symbol.strip().upper()} - 일봉"
 
@@ -508,8 +573,6 @@ def main():
     signal_15m   = {"score": 0.0, "verdict": "데이터 부족", "reasons": [], "last_time": ""}
     if not df_15m.empty:
         enriched_15m = compute_all(df_15m)
-        _atr_val = enriched.get("atr", pd.Series(dtype=float))
-        daily_atr = float(_atr_val.iloc[-1]) if hasattr(_atr_val, "iloc") and len(_atr_val) and pd.notna(_atr_val.iloc[-1]) else 0.0
         signal_15m   = generate_intraday_signal(
             enriched_15m,
             overheat_n=overheat_n,
@@ -531,6 +594,20 @@ def main():
         intraday_score=signal_15m.get("score", 0.0),
         fin=fin_data,
     )
+
+    # ── 시장 심리 · 밸류에이션 교차 검증 코멘트 ──────────────────────────────
+    senti_ctx = sentiment_context(fg.get("score"), signal["score"])
+    if senti_ctx:
+        if senti_ctx["level"] == "기회":
+            st.info(f"💡 {senti_ctx['message']}")
+        else:
+            st.warning(f"⚠️ {senti_ctx['message']}")
+    val_warn = valuation_warning(fin_data, signal["verdict"])
+    if val_warn:
+        st.warning(f"⚠️ {val_warn}")
+
+    # ── 시장 국면 배지 (ADX) ─────────────────────────────────────────────────
+    render_regime_badge(regime_info)
 
     # ── 일봉 과열 상태 카드 (종합결론↔일봉 기준판정 사이) ────────────────────
     if daily_overheated:
@@ -560,6 +637,9 @@ def main():
     col1, col2 = st.columns([1, 2])
     with col1:
         render_signal_card(signal, source, analyzed_at)
+        if last_close is not None:
+            risk = compute_risk_levels(entry=float(last_close), atr=daily_atr)
+            render_risk_card(risk, float(last_close), market)
         render_reasons_table(signal)
     with col2:
         st.plotly_chart(
@@ -608,6 +688,13 @@ def main():
                 use_container_width=True,
                 config=_CHART_CONFIG,
             )
+
+    # ── 섹션 3: 신호 백테스트 ────────────────────────────────────────────────
+    st.divider()
+    with st.expander("📊 신호 백테스트 — 이 종목에서 신호가 실제로 맞았는지 검증", expanded=False):
+        with st.spinner("과거 구간 신호 성과 집계 중…"):
+            bt = run_backtest(enriched)
+        render_backtest_section(bt)
 
 
 if __name__ == "__main__":

@@ -73,7 +73,9 @@ def test_intraday_signal_oversold_rsi_gives_positive():
          "volume": np.ones(n) * 1000.0},
         index=idx,
     )
-    result = generate_intraday_signal(compute_all(df))
+    # 반등폭(50→65, +30%)이 과열 필터(기본 15%)에 걸려 점수가 0이 되므로
+    # RSI 로직만 격리 검증하기 위해 임계값을 충분히 높여 전달한다.
+    result = generate_intraday_signal(compute_all(df), overheat_threshold=0.5)
     # RSI 30선 돌파 또는 과매도 잔류 → 양수 점수 기대
     assert result["score"] > 0, f"과매도 탈출 구간에서 양수 기대, 실제={result['score']}"
 

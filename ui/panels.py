@@ -10,8 +10,10 @@ _VERDICT_CFG: dict[str, dict] = {
     "강력 매도": {"color": "#c62828", "bg": "#fff5f5", "border": "#ef9a9a"},
 }
 
-_SCORE_MIN = -9.5
-_SCORE_MAX = 9.5
+# 이평선3 + MACD2 + 거래량2 + RSI1.5 + BB1 + 캔들1.5 + 다이버전스1.5
+# + 국면 가중(이평선·MACD ×1.3) ≈ 실용 최대 ±12
+_SCORE_MIN = -12.0
+_SCORE_MAX = 12.0
 
 
 def _pct(score: float) -> float:
@@ -37,13 +39,13 @@ def _gauge_html(score: float) -> str:
     )
 
     labels = [
-        (0,     "−9.5", "translateX(0)"),
+        (0,     "−12",  "translateX(0)"),
         (p_n5,  "−5",   "translateX(-50%)"),
         (p_n2,  "−2",   "translateX(-50%)"),
         (50,    "0",    "translateX(-50%)"),
         (p_p2,  "+2",   "translateX(-50%)"),
         (p_p5,  "+5",   "translateX(-50%)"),
-        (100,   "+9.5", "translateX(-100%)"),
+        (100,   "+12",  "translateX(-100%)"),
     ]
     label_spans = "".join(
         f'<span style="position:absolute;left:{p:.1f}%;transform:{tx};'
@@ -93,7 +95,7 @@ def render_signal_card(signal: dict, source: str, analyzed_at: str = "") -> None
         f'<div style="font-size:11px;color:#aaa;margin-bottom:2px;letter-spacing:0.4px;">종합점수</div>'
         f'<div style="font-size:24px;font-weight:600;color:{color};'
         f'letter-spacing:-0.24px;line-height:1;">{score:+.1f}'
-        f'<span style="font-size:13px;font-weight:400;color:#bbb;">&nbsp;/ ±9.5</span></div>'
+        f'<span style="font-size:13px;font-weight:400;color:#bbb;">&nbsp;/ ±12</span></div>'
         f'</div>'
         f'<div style="text-align:right;">'
         f'<div style="font-size:11px;color:#bbb;">데이터 &nbsp;{source}</div>'
@@ -364,3 +366,160 @@ def render_entry_point_card(daily_score: float, intraday_score: float,
         f'</div>',
         unsafe_allow_html=True,
     )
+
+
+# ── 리스크 관리 카드 (ATR 손절/목표가) ────────────────────────────────────────
+
+def _fmt_price(v: float, market: str) -> str:
+    return f"{v:,.0f}원" if market == "KR" else f"${v:,.2f}"
+
+
+def render_risk_card(risk: dict | None, entry: float, market: str) -> None:
+    """ATR 기반 손절가·목표가·리스크/리워드 카드."""
+    if not risk:
+        return
+
+    rows = [
+        ("손절가",   risk["stop"],    risk["stop_pct"],    "#c62828"),
+        ("진입 기준", entry,           0.0,                 "#1d1d1f"),
+        ("1차 목표", risk["target1"], risk["target1_pct"], "#2e7d32"),
+        ("2차 목표", risk["target2"], risk["target2_pct"], "#0a8a0a"),
+    ]
+    rows_html = ""
+    for label, price, pct, color in rows:
+        pct_str = f"{pct:+.1f}%" if pct else "현재가"
+        rows_html += (
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:center;padding:7px 0;border-bottom:1px solid #f0f0f3;">'
+            f'<span style="font-size:13px;color:#636366;">{label}</span>'
+            f'<span style="text-align:right;">'
+            f'<span style="font-size:15px;font-weight:600;color:{color};">'
+            f'{_fmt_price(price, market)}</span>'
+            f'<span style="font-size:11px;color:#aaa;margin-left:8px;">{pct_str}</span>'
+            f'</span></div>'
+        )
+
+    st.markdown(
+        f'<div style="background:#ffffff;border:1px solid rgba(0,0,0,0.08);'
+        f'border-radius:14px;padding:18px 20px 14px;margin-bottom:12px;'
+        f'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+        f'margin-bottom:8px;">'
+        f'<span style="font-size:11px;font-weight:600;color:#aaa;'
+        f'letter-spacing:0.6px;text-transform:uppercase;">리스크 관리 (ATR 기반)</span>'
+        f'<span style="font-size:11px;font-weight:600;color:#0066cc;">'
+        f'손익비 1:{risk["rr1"]:.1f} ~ 1:{risk["rr2"]:.1f}</span>'
+        f'</div>'
+        f'{rows_html}'
+        f'<div style="font-size:11px;color:#aaa;margin-top:8px;line-height:1.5;">'
+        f'손절 = 진입가 − 2×ATR · 목표 = 진입가 + 3~4×ATR<br>'
+        f'매수 시 손절가 이탈하면 기계적으로 청산하세요. 출구 규칙이 수익을 지킵니다.'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ── 시장 국면 배지 ────────────────────────────────────────────────────────────
+
+_REGIME_CFG = {
+    "추세장":   {"color": "#0066cc", "bg": "#f0f6ff", "border": "#bbd6f7", "icon": "📈"},
+    "횡보장":   {"color": "#8e6d00", "bg": "#fffbef", "border": "#f0e2af", "icon": "↔️"},
+    "전환 구간": {"color": "#757575", "bg": "#fafafa", "border": "#e0e0e0", "icon": "🔄"},
+    "판별 불가": {"color": "#9e9e9e", "bg": "#f9f9f9", "border": "#e0e0e0", "icon": "—"},
+}
+
+
+def render_regime_badge(regime_info: dict) -> None:
+    """ADX 기반 시장 국면 카드."""
+    regime = regime_info.get("regime", "판별 불가")
+    adx = regime_info.get("adx")
+    desc = regime_info.get("desc", "")
+    cfg = _REGIME_CFG.get(regime, _REGIME_CFG["판별 불가"])
+    adx_str = f"ADX {adx:.1f}" if adx is not None else "ADX —"
+
+    st.markdown(
+        f'<div style="padding:12px 18px;border-radius:14px;margin-bottom:8px;'
+        f'background:{cfg["bg"]};border:1.5px solid {cfg["border"]};'
+        f'font-family:system-ui,-apple-system,sans-serif;">'
+        f'<span style="font-size:14px;font-weight:700;color:{cfg["color"]};">'
+        f'{cfg["icon"]} 시장 국면: {regime}</span>'
+        f'<span style="font-size:12px;font-weight:600;color:{cfg["color"]};'
+        f'margin-left:10px;">{adx_str}</span>'
+        f'<div style="font-size:12px;color:#636366;margin-top:3px;">{desc}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ── 백테스트 결과 테이블 ──────────────────────────────────────────────────────
+
+def render_backtest_section(bt: dict) -> None:
+    """신호 백테스트 결과 — 판정별 적중률/평균 수익률."""
+    total = bt.get("total_signals", 0)
+    evaluated = bt.get("evaluated_bars", 0)
+    if total == 0:
+        st.caption("백테스트할 신호 표본이 부족합니다 (최소 80봉 필요).")
+        return
+
+    st.markdown(
+        f'<div style="font-size:12px;color:#636366;margin-bottom:8px;">'
+        f'최근 {evaluated}봉 구간에서 중립 제외 신호 <b>{total}회</b> 발생 — '
+        f'신호 발생 후 5봉/20봉 뒤 수익률 기준 적중률입니다.</div>',
+        unsafe_allow_html=True,
+    )
+
+    rows = []
+    for h, buckets in bt.get("horizons", {}).items():
+        for verdict, stats in buckets.items():
+            rows.append({
+                "판정": verdict,
+                "기간": f"{h}봉 후",
+                "표본": stats["count"],
+                "적중률": f"{stats['win_rate']:.0f}%",
+                "평균 수익률": f"{stats['avg_return']:+.2f}%",
+            })
+    if not rows:
+        st.caption("집계할 신호가 없습니다.")
+        return
+
+    order = {"강력 매수": 0, "매수 고려": 1, "매도 고려": 2, "강력 매도": 3}
+    rows.sort(key=lambda r: (order.get(r["판정"], 9), r["기간"]))
+    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.caption(
+        "⚠️ 이 종목의 과거 6개월 데이터 기준이며 미래 수익을 보장하지 않습니다. "
+        "적중률이 50% 부근이면 해당 판정은 이 종목에서 신뢰도가 낮다는 뜻입니다."
+    )
+
+
+# ── 스크리너 결과 테이블 ──────────────────────────────────────────────────────
+
+def render_screener_table(results: list[dict], market_fmt: str = "KR") -> None:
+    """관심종목 스캔 결과 — 점수순 정렬 테이블."""
+    if not results:
+        st.info("스캔할 종목이 없습니다.")
+        return
+
+    ok_rows = []
+    failed = []
+    for r in results:
+        if r["error"]:
+            failed.append(r)
+            continue
+        close = r["close"]
+        price = f"{close:,.0f}" if close >= 1000 else f"{close:,.2f}"
+        ok_rows.append({
+            "종목": r["symbol"],
+            "판정": r["verdict"],
+            "점수": f"{r['score']:+.1f}",
+            "현재가": price,
+            "국면": r["regime"],
+            "데이터": r["source"],
+        })
+
+    if ok_rows:
+        st.dataframe(pd.DataFrame(ok_rows), hide_index=True, use_container_width=True)
+    if failed:
+        with st.expander(f"조회 실패 {len(failed)}건", expanded=False):
+            for r in failed:
+                st.caption(f"**{r['symbol']}** — {r['error']}")
