@@ -1,5 +1,51 @@
-"""시장 분위기 지표: 미국 10년물 국채금리 + CNN Fear & Greed Index."""
+"""시장 분위기 지표: 미국 10년물 국채금리 + CNN Fear & Greed + 주요 지수 브리프."""
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+_YF_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+}
+
+
+def _yahoo_chart_closes(symbol: str, range_: str = "3mo",
+                        interval: str = "1d") -> tuple[list[float], str]:
+    """Yahoo v8 chart API에서 종가 목록 조회.
+
+    yfinance(curl-cffi)는 사내망 SSL MITM에서 인증서 오류로 실패하므로
+    requests 직접 호출 + verify=False 폴백 사용 (intraday/financials와 동일 패턴).
+    """
+    errors: list[str] = []
+    for base in ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"):
+        url = f"{base}/v8/finance/chart/{symbol}"
+        params = {"interval": interval, "range": range_}
+        for verify in (True, False):
+            try:
+                resp = requests.get(url, params=params, timeout=8,
+                                    headers=_YF_HEADERS, verify=verify)
+                resp.raise_for_status()
+                result = (resp.json().get("chart") or {}).get("result") or []
+                if not result:
+                    errors.append(f"{base}: result 없음")
+                    break
+                quote = (result[0].get("indicators", {}).get("quote") or [{}])[0]
+                closes = [c for c in (quote.get("close") or []) if c is not None]
+                if closes:
+                    return closes, ""
+                errors.append(f"{base}: close 없음")
+                break
+            except requests.exceptions.SSLError:
+                continue  # verify=False로 재시도
+            except Exception as e:
+                errors.append(f"{base}: {type(e).__name__}: {str(e)[:60]}")
+                break
+    return [], " | ".join(errors[:3]) or "SSL 오류"
 
 
 _CNN_HEADERS = {
@@ -21,18 +67,53 @@ _CNN_URLS = [
 
 
 def fetch_10y_yield() -> dict:
-    """yfinance로 미국 10년물 국채금리(^TNX) 조회."""
-    try:
-        import yfinance as yf
-        ticker = yf.Ticker("^TNX")
-        hist = ticker.history(period="5d")
-        if hist.empty:
-            return {"value": None, "error": "데이터 없음"}
-        value = round(float(hist["Close"].iloc[-1]), 3)
-        prev  = round(float(hist["Close"].iloc[-2]), 3) if len(hist) >= 2 else value
-        return {"value": value, "prev": prev, "change": round(value - prev, 3), "error": None}
-    except Exception as e:
-        return {"value": None, "error": str(e)}
+    """미국 10년물 국채금리(^TNX) 조회 — Yahoo v8 REST (yfinance 미사용)."""
+    closes, err = _yahoo_chart_closes("^TNX", range_="5d")
+    if not closes:
+        return {"value": None, "error": err or "데이터 없음"}
+    value = round(float(closes[-1]), 3)
+    prev = round(float(closes[-2]), 3) if len(closes) >= 2 else value
+    return {"value": value, "prev": prev, "change": round(value - prev, 3), "error": None}
+
+
+# ── 주요 지수 브리프 (KOSPI · NASDAQ) ────────────────────────────────────────
+
+def _brief_from_closes(closes: list[float]) -> dict | None:
+    """종가 목록으로 지수 간이 분석: 현재값·등락률·20일선 위치·단기 흐름."""
+    if not closes or len(closes) < 21:
+        return None
+    value = float(closes[-1])
+    prev = float(closes[-2])
+    change_pct = round((value / prev - 1) * 100, 2) if prev else 0.0
+    sma20 = sum(closes[-20:]) / 20
+    ret5 = (value / float(closes[-6]) - 1) * 100 if len(closes) >= 6 else 0.0
+    above = value >= sma20
+
+    if above and ret5 >= 0:
+        note = "20일선 위 · 단기 상승 흐름"
+    elif above:
+        note = "20일선 위 · 단기 숨고르기"
+    elif ret5 > 0:
+        note = "20일선 아래 · 반등 시도"
+    else:
+        note = "20일선 아래 · 조정 구간"
+
+    return {
+        "value":       round(value, 2),
+        "change_pct":  change_pct,
+        "sma20":       round(sma20, 2),
+        "above_sma20": above,
+        "note":        note,
+    }
+
+
+def fetch_index_brief(symbol: str, name: str) -> dict:
+    """지수 간이 분석 조회. 실패 시 {name, value: None, error}."""
+    closes, err = _yahoo_chart_closes(symbol, range_="3mo")
+    brief = _brief_from_closes(closes)
+    if brief is None:
+        return {"name": name, "value": None, "error": err or "데이터 부족"}
+    return {"name": name, **brief, "error": None}
 
 
 def _parse_fg(data: dict) -> dict | None:

@@ -11,7 +11,9 @@ from core.data.financials import fetch_financials
 from core.data.base import detect_market
 from core.indicators import compute_all
 from core.signals import generate_signal, generate_intraday_signal, is_overheated
-from core.market_sentiment import fetch_10y_yield, fetch_fear_greed, rating_ko
+from core.market_sentiment import (
+    fetch_10y_yield, fetch_fear_greed, fetch_index_brief, rating_ko,
+)
 from core.regime import WEIGHTED_REGIMES, detect_regime
 from core.risk import compute_risk_levels, evaluate_position, trailing_stop_from_df
 from core.backtest import run_backtest
@@ -70,6 +72,15 @@ def get_portfolio() -> PortfolioStore:
 def get_market_sentiment() -> tuple[dict, dict]:
     """10Y 국채금리 + CNN F&G (5분 캐시)."""
     return fetch_10y_yield(), fetch_fear_greed()
+
+
+@st.cache_data(ttl=300)
+def get_index_briefs() -> list[dict]:
+    """KOSPI · NASDAQ 지수 간이 분석 (5분 캐시)."""
+    return [
+        fetch_index_brief("^KS11", "KOSPI"),
+        fetch_index_brief("^IXIC", "NASDAQ"),
+    ]
 
 
 @st.cache_data(ttl=3600)
@@ -474,6 +485,35 @@ def main():
             )
         else:
             st.caption("공포·탐욕 지수 조회 실패")
+
+        # ── 주요 지수 브리프 (KOSPI · NASDAQ) ────────────────────────────
+        st.markdown("---")
+        st.markdown(
+            '<div style="font-size:12px;font-weight:600;color:#888;'
+            'letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;">'
+            '주요 지수</div>',
+            unsafe_allow_html=True,
+        )
+        for brief in get_index_briefs():
+            if brief.get("value") is None:
+                st.caption(f"{brief['name']} 조회 실패")
+                continue
+            chg = brief["change_pct"]
+            chg_color = "#0a8a0a" if chg >= 0 else "#c62828"
+            note_color = "#2e7d32" if brief["above_sma20"] else "#c62828"
+            st.markdown(
+                f'<div style="margin-bottom:10px;">'
+                f'<span style="font-size:11px;color:#aaa;">{brief["name"]}</span><br>'
+                f'<span style="font-size:18px;font-weight:700;color:#1d1d1f;">'
+                f'{brief["value"]:,.2f}</span>'
+                f'<span style="font-size:12px;font-weight:600;color:{chg_color};'
+                f'margin-left:6px;">{chg:+.2f}%</span><br>'
+                f'<span style="font-size:11px;font-weight:600;color:{note_color};">'
+                f'{brief["note"]}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
         st.markdown(
             '<div style="font-size:14px;color:#aaa;text-align:left;margin-top:8px;">'
             'made by penguin</div>',
