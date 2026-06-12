@@ -20,6 +20,7 @@ _STATUS_ORDER = {
     "2차 목표 도달": 2,
     "1차 목표 도달": 3,
     "보유 유지":     4,
+    "입력 오류":     8,
     "조회 실패":     9,
 }
 
@@ -113,7 +114,19 @@ def analyze_positions(positions: list[dict],
                 atr=atr, trailing_stop=trailing,
             )
             if evaluated is None:
-                raise ValueError("리스크 계산 불가 (매수가·ATR 확인)")
+                ep = pos["entry_price"]
+                atr_str = f"{atr:,.0f}" if atr > 0 else "미상"
+                min_entry = atr * 2 if atr > 0 else 0
+                rows.append({
+                    **_error_row(pos, (
+                        f"매수가({ep:,.0f})가 너무 낮습니다 — "
+                        f"ATR({atr_str})의 2배({min_entry:,.0f})보다 작아 손절가가 음수가 됩니다. "
+                        f"현재가는 {current:,.0f}입니다. 삭제 후 실제 매수단가로 다시 등록하세요."
+                    )),
+                    "status": "입력 오류",
+                    "current": current,
+                })
+                continue
 
             rows.append({
                 "id":             pos["id"],

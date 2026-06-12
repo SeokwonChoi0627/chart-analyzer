@@ -621,6 +621,7 @@ _PF_STATUS_COLOR = {
     "2차 목표 도달": "#0a8a0a",
     "1차 목표 도달": "#2e7d32",
     "보유 유지":     "#0066cc",
+    "입력 오류":     "#b45309",
     "조회 실패":     "#9e9e9e",
 }
 
@@ -726,7 +727,18 @@ def render_portfolio_table(rows: list[dict]) -> None:
             unsafe_allow_html=True,
         )
 
-    if failed:
-        with st.expander(f"조회 실패 {len(failed)}건", expanded=False):
-            for r in failed:
+    input_errors = [r for r in failed if r.get("status") == "입력 오류"]
+    fetch_errors  = [r for r in failed if r.get("status") != "입력 오류"]
+
+    if input_errors:
+        with st.expander(f"⚠️ 입력 오류 {len(input_errors)}건 — 매수가 확인 필요", expanded=True):
+            for r in input_errors:
+                st.warning(
+                    f"**{r['symbol']}** (등록 매수가: **{r['entry_price']:,.0f}**)\n\n"
+                    f"{r['error']}",
+                    icon="⚠️",
+                )
+    if fetch_errors:
+        with st.expander(f"조회 실패 {len(fetch_errors)}건", expanded=False):
+            for r in fetch_errors:
                 st.caption(f"**{r['symbol']}** (매수가 {r['entry_price']:,.0f}) — {r['error']}")
