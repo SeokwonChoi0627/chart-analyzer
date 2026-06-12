@@ -610,12 +610,14 @@ def main():
 
     # ── 내 포트폴리오 모드 ───────────────────────────────────────────────────
     if mode == "포트폴리오":
-        st.markdown(
-            '<div style="font-size:22px;font-weight:700;color:#1d1d1f;'
-            'letter-spacing:-0.4px;margin:8px 0 14px;'
-            'font-family:system-ui,-apple-system,sans-serif;">내 포트폴리오</div>',
-            unsafe_allow_html=True,
-        )
+        _title_col, _btn_col = st.columns([6, 1])
+        with _title_col:
+            st.markdown(
+                '<div style="font-size:22px;font-weight:700;color:#1d1d1f;'
+                'letter-spacing:-0.4px;margin:8px 0 14px;'
+                'font-family:system-ui,-apple-system,sans-serif;">내 포트폴리오</div>',
+                unsafe_allow_html=True,
+            )
 
         expected_pw = os.getenv("PORTFOLIO_PASSWORD", "")
         if not expected_pw:
@@ -657,20 +659,22 @@ def main():
             rows = analyze_positions(
                 positions, fetch_fn=lambda s: fetch(s, PERIOD_DAYS, cache))
 
+        with _btn_col:
+            st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
+            st.download_button(
+                label="📥 엑셀",
+                data=_portfolio_to_excel(rows),
+                file_name=f"portfolio_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
         render_portfolio_summary(summarize(rows))
         render_portfolio_table(rows)
         st.caption(
             "위험한 포지션(손절 이탈)부터 정렬됩니다. "
             "권장 청산선 = 매수가 기준 고정 손절(−2×ATR)과 트레일링 스탑(최근 고점−3×ATR) 중 높은 쪽. "
             "매수추천도는 일봉 종합 신호(국면 가중) 기준입니다."
-        )
-
-        st.download_button(
-            label="📥 포트폴리오 엑셀 다운로드",
-            data=_portfolio_to_excel(rows),
-            file_name=f"portfolio_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
         )
         return
 
