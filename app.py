@@ -1,3 +1,4 @@
+import io
 import os
 from datetime import datetime
 import pandas as pd
@@ -29,6 +30,41 @@ from ui.panels import (
     render_backtest_section, render_screener_table, render_position_card,
     render_portfolio_summary, render_portfolio_table,
 )
+
+
+def _portfolio_to_excel(rows: list[dict]) -> bytes:
+    """포트폴리오 분석 결과를 Excel(xlsx) 바이트로 변환."""
+    data = []
+    for r in rows:
+        market = r.get("market", "KR")
+        qty = r.get("quantity") or 0
+        current = r.get("current")
+        entry = r.get("entry_price", 0)
+        pnl = r.get("pnl_pct")
+        eval_amount = (current * qty) if (current and qty) else None
+
+        data.append({
+            "종목":        r["symbol"],
+            "매수가(주당)": entry,
+            "수량":        qty if qty else "",
+            "현재가":      current if current else "",
+            "원화(평가금액)": eval_amount if market == "KR" else "",
+            "달러(평가금액)": eval_amount if market == "US" else "",
+            "수익률(%)":   pnl if pnl is not None else "",
+            "상태":        r.get("status", ""),
+            "국면":        r.get("regime", ""),
+        })
+
+    df = pd.DataFrame(data)
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="포트폴리오")
+        ws = writer.sheets["포트폴리오"]
+        # 컬럼 너비 자동 조정
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 30)
+    return buf.getvalue()
 
 
 def _parse_entry_price(raw: str) -> float:
@@ -627,6 +663,14 @@ def main():
             "위험한 포지션(손절 이탈)부터 정렬됩니다. "
             "권장 청산선 = 매수가 기준 고정 손절(−2×ATR)과 트레일링 스탑(최근 고점−3×ATR) 중 높은 쪽. "
             "매수추천도는 일봉 종합 신호(국면 가중) 기준입니다."
+        )
+
+        st.download_button(
+            label="📥 포트폴리오 엑셀 다운로드",
+            data=_portfolio_to_excel(rows),
+            file_name=f"portfolio_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
         )
         return
 
