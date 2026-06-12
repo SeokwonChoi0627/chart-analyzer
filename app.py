@@ -449,14 +449,31 @@ def main():
             # ── 내 포트폴리오: 종목 등록/삭제 (로그인 후) ──────────────────
             with st.form("pf_add_form", clear_on_submit=True):
                 pf_symbol = st.text_input("종목", placeholder="삼성전자 / AAPL")
-                pf_entry = st.text_input("매수가", placeholder="예: 270000")
+                pf_entry = st.text_input(
+                    "매수가 (주당 가격)",
+                    placeholder="예: 97281  ※ 총금액 ÷ 수량 = 주당가격",
+                    help="총 투자금액이 아닌 주당 매수단가를 입력하세요.\n"
+                         "예) 총 1,945,625원에 20주 매수 → 1945625 ÷ 20 = 97,281 입력",
+                )
                 pf_qty = st.text_input("수량 (선택)", placeholder="예: 10 — 미입력 시 수익률만")
                 pf_add = st.form_submit_button("보유 종목 등록", use_container_width=True)
             if pf_add:
                 try:
+                    ep = _parse_entry_price(pf_entry)
                     qty_val = float(pf_qty.replace(",", "").strip() or 0)
-                    get_portfolio().add(pf_symbol, _parse_entry_price(pf_entry), qty_val)
-                    st.success(f"'{pf_symbol.strip()}' 등록 완료")
+                    if ep > 0 and qty_val > 0:
+                        total_hint = ep * qty_val
+                        # 총금액처럼 보이는 큰 수를 주당가격으로 잘못 입력했을 가능성 경고
+                        if total_hint > 500_000_000:
+                            st.warning(
+                                f"매수가({ep:,.0f}) × 수량({qty_val:g}) = {total_hint:,.0f}원 — "
+                                "총 투자금액이 아닌 **주당 가격**을 입력해야 합니다. "
+                                f"주당가격 = {ep:,.0f} ÷ {qty_val:g} = "
+                                f"{ep / qty_val:,.0f}원 이 맞지 않나요?",
+                                icon="⚠️",
+                            )
+                    get_portfolio().add(pf_symbol, ep, qty_val)
+                    st.success(f"'{pf_symbol.strip()}' 등록 완료 (주당 {ep:,.0f}원)")
                 except ValueError as e:
                     st.error(f"등록 실패: {e}")
             pf_positions = get_portfolio().list_positions()
