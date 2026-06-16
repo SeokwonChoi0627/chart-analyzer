@@ -691,53 +691,54 @@ def render_portfolio_table(rows: list[dict]) -> None:
         entry_label = "평단" if lots > 1 else "매수가"
         lot_note = f' · {lots}건 합산' if lots > 1 else ""
 
-        st.markdown(
-            f'<div style="background:#ffffff;border:1px solid rgba(0,0,0,0.08);'
-            f'border-left:4px solid {status_color};border-radius:12px;'
-            f'padding:14px 18px;margin-bottom:10px;'
-            f'font-family:system-ui,-apple-system,sans-serif;">'
-            # 1행: 종목 + 상태
-            f'<div style="display:flex;justify-content:space-between;align-items:center;'
-            f'margin-bottom:8px;">'
-            f'<span style="font-size:16px;font-weight:700;color:#1d1d1f;">'
-            f'{r["symbol"]}'
-            f'<span style="font-size:11px;font-weight:500;color:#aaa;margin-left:8px;">'
-            f'{entry_label} {_money(r["entry_price"], m)}{qty_note}{lot_note}</span></span>'
-            f'<span style="font-size:12px;font-weight:700;color:#ffffff;'
-            f'background:{status_color};padding:3px 12px;border-radius:9999px;">'
-            f'{r["status"]}</span>'
-            f'</div>'
-            # 2행: 수치 그리드
-            f'<div style="display:flex;gap:20px;flex-wrap:wrap;">'
-            f'<div><div style="font-size:10px;color:#aaa;">현재가</div>'
-            f'<div style="font-size:14px;font-weight:600;color:#1d1d1f;">{_money(r["current"], m)}</div></div>'
-            f'<div><div style="font-size:10px;color:#aaa;">수익률</div>'
-            f'<div style="font-size:14px;font-weight:700;color:{pnl_color};">{r["pnl_pct"]:+.2f}%</div></div>'
-            f'<div><div style="font-size:10px;color:#aaa;">매수추천도</div>'
-            f'<div style="font-size:14px;font-weight:600;color:#1d1d1f;">'
-            f'{r["verdict"]} <span style="font-size:11px;color:#aaa;">({score:+.1f})</span></div></div>'
-            f'<div><div style="font-size:10px;color:#aaa;">권장 청산선</div>'
-            f'<div style="font-size:14px;font-weight:700;color:#c62828;">{_money(r["effective_stop"], m)}</div></div>'
-            f'<div><div style="font-size:10px;color:#aaa;">1차 목표</div>'
-            f'<div style="font-size:14px;font-weight:600;color:#2e7d32;">{_money(r["target1"], m)}</div></div>'
-            f'<div><div style="font-size:10px;color:#aaa;">국면</div>'
-            f'<div style="font-size:14px;font-weight:600;color:#636366;">{r["regime"]}</div></div>'
-            f'</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        # 단일종목분석 바로가기 버튼
-        _jc1, _jc2 = st.columns([5, 1])
-        with _jc2:
-            if st.button(
-                "분석 →",
-                key=f"jump_{r['symbol']}_{r.get('id', i)}",
-                use_container_width=True,
-            ):
-                st.session_state["jump_symbol"] = r["symbol"]
-                st.session_state["jump_run"] = True
-                st.session_state["mode_radio"] = "단일종목분석"
-                st.rerun()
+        # 카드 박스(테두리) 안에 내용 + 분석 버튼을 함께 배치
+        with st.container(border=True):
+            _cc1, _cc2 = st.columns([6, 1], vertical_alignment="center")
+            with _cc1:
+                st.markdown(
+                    f'<div style="border-left:4px solid {status_color};'
+                    f'padding-left:10px;'
+                    f'font-family:system-ui,-apple-system,sans-serif;">'
+                    # 1행: 종목 + 상태 + 매수가
+                    f'<div style="display:flex;align-items:center;gap:8px;'
+                    f'flex-wrap:wrap;margin-bottom:8px;">'
+                    f'<span style="font-size:16px;font-weight:700;color:#1d1d1f;">'
+                    f'{r["symbol"]}</span>'
+                    f'<span style="font-size:12px;font-weight:700;color:#ffffff;'
+                    f'background:{status_color};padding:3px 12px;border-radius:9999px;">'
+                    f'{r["status"]}</span>'
+                    f'<span style="font-size:11px;font-weight:500;color:#aaa;">'
+                    f'{entry_label} {_money(r["entry_price"], m)}{qty_note}{lot_note}</span>'
+                    f'</div>'
+                    # 2행: 수치 그리드
+                    f'<div style="display:flex;gap:20px;flex-wrap:wrap;">'
+                    f'<div><div style="font-size:10px;color:#aaa;">현재가</div>'
+                    f'<div style="font-size:14px;font-weight:600;color:#1d1d1f;">{_money(r["current"], m)}</div></div>'
+                    f'<div><div style="font-size:10px;color:#aaa;">수익률</div>'
+                    f'<div style="font-size:14px;font-weight:700;color:{pnl_color};">{r["pnl_pct"]:+.2f}%</div></div>'
+                    f'<div><div style="font-size:10px;color:#aaa;">매수추천도</div>'
+                    f'<div style="font-size:14px;font-weight:600;color:#1d1d1f;">'
+                    f'{r["verdict"]} <span style="font-size:11px;color:#aaa;">({score:+.1f})</span></div></div>'
+                    f'<div><div style="font-size:10px;color:#aaa;">권장 청산선</div>'
+                    f'<div style="font-size:14px;font-weight:700;color:#c62828;">{_money(r["effective_stop"], m)}</div></div>'
+                    f'<div><div style="font-size:10px;color:#aaa;">1차 목표</div>'
+                    f'<div style="font-size:14px;font-weight:600;color:#2e7d32;">{_money(r["target1"], m)}</div></div>'
+                    f'<div><div style="font-size:10px;color:#aaa;">국면</div>'
+                    f'<div style="font-size:14px;font-weight:600;color:#636366;">{r["regime"]}</div></div>'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            with _cc2:
+                if st.button(
+                    "분석 →",
+                    key=f"jump_{r['symbol']}_{r.get('id', i)}",
+                    use_container_width=True,
+                ):
+                    st.session_state["jump_symbol"] = r["symbol"]
+                    st.session_state["jump_run"] = True
+                    st.session_state["mode_radio"] = "단일종목분석"
+                    st.rerun()
 
     input_errors = [r for r in failed if r.get("status") == "입력 오류"]
     fetch_errors  = [r for r in failed if r.get("status") != "입력 오류"]
