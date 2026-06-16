@@ -737,7 +737,7 @@ def render_portfolio_table(rows: list[dict]) -> None:
                 ):
                     st.session_state["jump_symbol"] = r["symbol"]
                     st.session_state["jump_run"] = True
-                    st.session_state["mode_radio"] = "단일종목분석"
+                    st.session_state["pending_mode"] = "단일종목분석"
                     st.rerun()
 
     input_errors = [r for r in failed if r.get("status") == "입력 오류"]

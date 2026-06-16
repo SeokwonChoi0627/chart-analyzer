@@ -518,6 +518,10 @@ def main():
         # 포트폴리오 카드에서 넘어온 종목 처리
         _jump_sym = st.session_state.pop("jump_symbol", None)
         _jump_run = st.session_state.pop("jump_run", False)
+        # 카드 '분석' 버튼이 요청한 모드 전환은 위젯 생성 '전에' 적용해야 한다
+        # (위젯 인스턴스화 후 mode_radio 직접 수정은 StreamlitAPIException)
+        if "pending_mode" in st.session_state:
+            st.session_state["mode_radio"] = st.session_state.pop("pending_mode")
 
         mode = st.radio(
             "분석 모드",
