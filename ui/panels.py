@@ -681,7 +681,7 @@ def render_portfolio_table(rows: list[dict]) -> None:
         st.info("등록된 포지션이 없습니다.")
         return
 
-    for r in ok_rows:
+    for i, r in enumerate(ok_rows):
         m = r["market"]
         status_color = _PF_STATUS_COLOR.get(r["status"], "#9e9e9e")
         pnl_color = _PNL_GREEN if (r["pnl_pct"] or 0) >= 0 else _PNL_RED
@@ -726,6 +726,18 @@ def render_portfolio_table(rows: list[dict]) -> None:
             f'</div>',
             unsafe_allow_html=True,
         )
+        # 단일종목분석 바로가기 버튼
+        _jc1, _jc2 = st.columns([5, 1])
+        with _jc2:
+            if st.button(
+                "분석 →",
+                key=f"jump_{r['symbol']}_{r.get('id', i)}",
+                use_container_width=True,
+            ):
+                st.session_state["jump_symbol"] = r["symbol"]
+                st.session_state["jump_run"] = True
+                st.session_state["mode_radio"] = "단일종목분석"
+                st.rerun()
 
     input_errors = [r for r in failed if r.get("status") == "입력 오류"]
     fetch_errors  = [r for r in failed if r.get("status") != "입력 오류"]
@@ -742,3 +754,28 @@ def render_portfolio_table(rows: list[dict]) -> None:
         with st.expander(f"조회 실패 {len(fetch_errors)}건", expanded=False):
             for r in fetch_errors:
                 st.caption(f"**{r['symbol']}** (매수가 {r['entry_price']:,.0f}) — {r['error']}")
+
+
+_ACTION_LABEL = {"add": "등록", "remove": "삭제", "import": "복원"}
+
+
+def render_portfolio_history(history: list[dict]) -> None:
+    """포트폴리오 변경 이력 — 등록/삭제/복원 기록 (최신순)."""
+    if not history:
+        st.caption("아직 변경 이력이 없습니다.")
+        return
+    table = [
+        {
+            "일시": h["recorded_at"].replace("T", " "),
+            "구분": _ACTION_LABEL.get(h["action"], h["action"]),
+            "종목": h["symbol"],
+            "매수가": f'{h["entry_price"]:,.4g}',
+            "수량": f'{h["quantity"]:g}',
+        }
+        for h in history
+    ]
+    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.caption(
+        "모든 변경은 DB와 별개로 `data/history.jsonl`에도 영구 기록되며, "
+        "앱 시작 시 `data/backups/`에 자동 백업됩니다."
+    )

@@ -22,14 +22,49 @@ from core.screener import scan_symbols
 from core.context import sentiment_context, valuation_warning
 from core.auth import verify_password
 from core.portfolio import PortfolioStore
+from core.backup import make_backup
 from core.dashboard import analyze_positions, summarize
 from ui.chart import build_chart, build_intraday_chart
 from ui.panels import (
     render_signal_card, render_reasons_table, render_intraday_panel,
     render_entry_point_card, render_risk_card, render_regime_badge,
     render_backtest_section, render_screener_table, render_position_card,
-    render_portfolio_summary, render_portfolio_table,
+    render_portfolio_summary, render_portfolio_table, render_portfolio_history,
 )
+
+
+def _parse_portfolio_xlsx(file) -> list[dict]:
+    """업로드한 포트폴리오 엑셀에서 종목·주당매수가·수량을 추출.
+
+    헤더 이름(종목 / 매수가(주당) / 수량)으로 컬럼을 찾는다.
+    엑셀 내보내기 형식과 호환된다.
+    """
+    df = pd.read_excel(file)
+    cols = {str(c).strip(): c for c in df.columns}
+
+    def pick(*names):
+        for n in names:
+            if n in cols:
+                return cols[n]
+        return None
+
+    c_sym = pick("종목", "symbol")
+    c_price = pick("매수가(주당)", "매수가", "entry_price")
+    c_qty = pick("수량", "quantity")
+    if c_sym is None or c_price is None:
+        raise ValueError("종목 / 매수가(주당) 컬럼을 찾을 수 없습니다")
+
+    positions = []
+    for _, row in df.iterrows():
+        symbol = str(row[c_sym]).strip() if pd.notna(row[c_sym]) else ""
+        price = row[c_price]
+        if not symbol or pd.isna(price) or float(price) <= 0:
+            continue
+        qty = row[c_qty] if (c_qty is not None and pd.notna(row[c_qty])) else 0
+        positions.append({
+            "symbol": symbol, "entry_price": float(price), "quantity": float(qty),
+        })
+    return positions
 
 
 def _portfolio_to_excel(rows: list[dict]) -> bytes:
@@ -98,9 +133,32 @@ def get_cache() -> OhlcvCache:
     return OhlcvCache(CACHE_PATH)
 
 
+def _portfolio_db_url() -> str:
+    """Supabase Postgres 접속 URL을 환경변수 또는 Streamlit Secrets에서 읽는다.
+
+    설정돼 있으면 웹·로컬 모두 Supabase에 영구 저장(단일 진실 공급원).
+    없으면 빈 문자열 → 로컬 SQLite 폴백.
+    """
+    url = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL", "")
+    if not url:
+        try:
+            url = st.secrets.get("SUPABASE_DB_URL", "")
+        except Exception:
+            url = ""
+    return url
+
+
 @st.cache_resource
 def get_portfolio() -> PortfolioStore:
+    url = _portfolio_db_url()
+    if url:
+        # 영구 저장소(Supabase Postgres) — Streamlit Cloud 재시작에도 보존.
+        # 기존 Supabase 프로젝트와 공유 시 전용 스키마로 격리 (기본 chart_analyzer)
+        schema = os.getenv("SUPABASE_DB_SCHEMA", "chart_analyzer")
+        return PortfolioStore(url, schema=schema)
+    # 폴백: 로컬 SQLite (휘발성 환경에서는 데이터가 유지되지 않음에 유의)
     os.makedirs(os.path.dirname(PORTFOLIO_DB_PATH), exist_ok=True)
+    make_backup(PORTFOLIO_DB_PATH)
     return PortfolioStore(PORTFOLIO_DB_PATH)
 
 
@@ -457,22 +515,35 @@ def main():
     with st.sidebar:
         st.title("차트 분석기")
         st.markdown('<div style="margin-bottom:28px;"></div>', unsafe_allow_html=True)
+        # 포트폴리오 카드에서 넘어온 종목 처리
+        _jump_sym = st.session_state.pop("jump_symbol", None)
+        _jump_run = st.session_state.pop("jump_run", False)
+
         mode = st.radio(
             "분석 모드",
             ["단일종목분석", "여러종목분석", "포트폴리오"],
             label_visibility="collapsed",
+            key="mode_radio",
         )
         symbol_sb, run_sb = "", False
         watchlist_raw, run_screener = "", False
         entry_raw = ""
         if mode == "단일종목분석":
             with st.form("analysis_form"):
-                symbol_sb = st.text_input("종목", placeholder="삼성전자 / 005930 / AAPL")
+                symbol_sb = st.text_input(
+                    "종목",
+                    placeholder="삼성전자 / 005930 / AAPL",
+                    value=_jump_sym or "",
+                )
                 entry_raw = st.text_input(
                     "내 매수가 (보유 시)",
                     placeholder="예: 298500 — 미보유 시 비워두세요",
                 )
                 run_sb = st.form_submit_button("분석 실행", use_container_width=True)
+            # 포트폴리오에서 바로 넘어온 경우 자동 실행
+            if _jump_run and _jump_sym:
+                run_sb = True
+                symbol_sb = _jump_sym
         elif mode == "여러종목분석":
             with st.form("screener_form"):
                 watchlist_raw = st.text_area(
@@ -524,6 +595,22 @@ def main():
                 if st.button("선택 종목 삭제", use_container_width=True):
                     get_portfolio().remove(pf_labels[pf_sel])
                     st.rerun()
+            # ── 엑셀에서 복원 ────────────────────────────────────────────
+            with st.expander("📥 엑셀에서 복원", expanded=False):
+                up = st.file_uploader(
+                    "포트폴리오 엑셀(.xlsx)", type=["xlsx"], key="pf_restore_upload")
+                replace_mode = st.checkbox(
+                    "기존 종목 전체 교체", value=True,
+                    help="체크 해제 시 기존 종목에 추가됩니다.")
+                if up is not None and st.button("이 엑셀로 복원", use_container_width=True):
+                    try:
+                        parsed = _parse_portfolio_xlsx(up)
+                        n = get_portfolio().import_positions(
+                            parsed, replace=replace_mode)
+                        st.success(f"{n}개 종목 복원 완료")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"복원 실패: {e}")
             if st.button("로그아웃", use_container_width=True):
                 st.session_state["pf_authed"] = False
                 st.rerun()
@@ -648,6 +735,16 @@ def main():
                     st.error("비밀번호가 올바르지 않습니다.")
             return
 
+        if _portfolio_db_url():
+            st.caption("🟢 Supabase 영구 저장소 연결됨 — 데이터가 안전하게 보존됩니다.")
+        else:
+            st.warning(
+                "⚠️ 영구 저장소(SUPABASE_DB_URL)가 설정되지 않아 **로컬 임시 저장(SQLite)** 으로 동작 중입니다. "
+                "Streamlit Cloud에서는 앱이 재시작되면 데이터가 사라집니다. "
+                "Settings → Secrets에 `SUPABASE_DB_URL`을 추가하세요.",
+                icon="⚠️",
+            )
+
         positions = get_portfolio().list_positions()
         if not positions:
             st.info("사이드바에서 보유 종목(종목·매수가·수량)을 등록하세요. "
@@ -676,6 +773,8 @@ def main():
             "권장 청산선 = 매수가 기준 고정 손절(−2×ATR)과 트레일링 스탑(최근 고점−3×ATR) 중 높은 쪽. "
             "매수추천도는 일봉 종합 신호(국면 가중) 기준입니다."
         )
+        with st.expander("🕘 변경 이력", expanded=False):
+            render_portfolio_history(get_portfolio().history())
         return
 
     # ── 관심종목 스크리너 모드 ────────────────────────────────────────────────
