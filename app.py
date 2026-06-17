@@ -584,7 +584,11 @@ def main():
                                 icon="⚠️",
                             )
                     get_portfolio().add(pf_symbol, ep, qty_val)
-                    st.success(f"'{pf_symbol.strip()}' 등록 완료 (주당 {ep:,.0f}원)")
+                    sym = pf_symbol.strip()
+                    price_label = (
+                        f"{ep:,.0f}원" if detect_market(sym) == "KR" else f"${ep:,.2f}"
+                    )
+                    st.success(f"'{sym}' 등록 완료 (주당 {price_label})")
                 except ValueError as e:
                     st.error(f"등록 실패: {e}")
             pf_positions = get_portfolio().list_positions()
