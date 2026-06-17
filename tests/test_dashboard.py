@@ -20,6 +20,8 @@ def _fake_fetch(symbol):
         return _make_df([100 + i for i in range(120)]), "테스트"
     if symbol == "DOWN":     # 300 → 181 하락
         return _make_df([300 - i for i in range(120)]), "테스트"
+    if symbol == "NEW":      # 신규 상장 — 3봉뿐, ATR(14) 미계산
+        return _make_df([200, 198, 202]), "테스트"
     raise ValueError("조회 실패")
 
 
@@ -50,6 +52,27 @@ def test_error_position_kept_with_message():
     rows = analyze_positions([_pos("ERR", entry=100)], fetch_fn=_fake_fetch)
     assert rows[0]["error"] is not None
     assert rows[0]["status"] == "조회 실패"
+
+
+def test_new_listing_without_atr_shown_as_position_not_error():
+    """신규 상장(데이터 3봉) — ATR 미계산이라도 입력 오류가 아니라
+    정상 포지션으로 표시한다. 손익은 계산하되 리스크 레벨만 생략."""
+    rows = analyze_positions([_pos("NEW", entry=200, qty=50)], fetch_fn=_fake_fetch)
+    row = rows[0]
+    assert row["error"] is None
+    assert row["status"] == "지표 부족"
+    assert row["current"] == 202
+    assert row["pnl_pct"] == 1.0          # (202 - 200) / 200 * 100
+    assert row["effective_stop"] is None  # ATR 없어 손절/목표 산출 불가
+    assert row["target1"] is None
+
+
+def test_new_listing_counts_toward_summary():
+    """ATR 미계산 포지션도 손익 합산에 포함된다."""
+    rows = analyze_positions([_pos("NEW", entry=200, qty=50)], fetch_fn=_fake_fetch)
+    us = summarize(rows)["US"]
+    assert us["invested"] == 200 * 50
+    assert us["value"] == 202 * 50
 
 
 def test_dangerous_positions_sorted_first():

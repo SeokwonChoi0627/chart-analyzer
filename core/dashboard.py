@@ -20,6 +20,7 @@ _STATUS_ORDER = {
     "2차 목표 도달": 2,
     "1차 목표 도달": 3,
     "보유 유지":     4,
+    "지표 부족":     5,
     "입력 오류":     8,
     "조회 실패":     9,
 }
@@ -84,6 +85,35 @@ def _error_row(pos: dict, message: str) -> dict:
     }
 
 
+def _limited_row(pos: dict, current: float, sig: dict,
+                 regime: str, source: str) -> dict:
+    """ATR 미계산(신규 상장 등 데이터 부족) 포지션 행.
+
+    손익은 현재가로 계산하되, ATR 기반 손절·목표·트레일링은 산출 불가하므로
+    None으로 둔다. 조회 실패가 아니라 정상 보유 포지션이므로 손익 합산에 포함된다.
+    """
+    entry = pos["entry_price"]
+    return {
+        "id":             pos["id"],
+        "symbol":         pos["symbol"],
+        "entry_price":    entry,
+        "quantity":       pos.get("quantity", 0),
+        "lots":           pos.get("lots", 1),
+        "current":        current,
+        "pnl_pct":        round((current - entry) / entry * 100, 2),
+        "verdict":        sig["verdict"],
+        "score":          sig["score"],
+        "effective_stop": None,
+        "trailing_stop":  None,
+        "target1":        None,
+        "status":         "지표 부족",
+        "market":         detect_market(pos["symbol"]),
+        "regime":         regime,
+        "source":         source,
+        "error":          None,
+    }
+
+
 def analyze_positions(positions: list[dict],
                       fetch_fn: Callable[[str], tuple[pd.DataFrame, str]]) -> list[dict]:
     """등록 포지션 전체 분석. 같은 종목의 물타기 lot은 평단 기준 1건으로 병합."""
@@ -114,13 +144,18 @@ def analyze_positions(positions: list[dict],
                 atr=atr, trailing_stop=trailing,
             )
             if evaluated is None:
+                if atr <= 0:
+                    # ATR 미계산(신규 상장 등 데이터 14봉 미만) — 입력 오류가 아니라
+                    # 데이터 부족. 정상 포지션으로 표시하고 리스크 레벨만 생략한다.
+                    rows.append(_limited_row(pos, current, sig, regime, source))
+                    continue
+                # ATR은 정상인데 2×ATR ≥ 매수가 → 손절가가 음수. 실제 입력 오류.
                 ep = pos["entry_price"]
-                atr_str = f"{atr:,.0f}" if atr > 0 else "미상"
-                min_entry = atr * 2 if atr > 0 else 0
+                min_entry = atr * 2
                 rows.append({
                     **_error_row(pos, (
                         f"매수가({ep:,.0f})가 너무 낮습니다 — "
-                        f"ATR({atr_str})의 2배({min_entry:,.0f})보다 작아 손절가가 음수가 됩니다. "
+                        f"ATR({atr:,.0f})의 2배({min_entry:,.0f})보다 작아 손절가가 음수가 됩니다. "
                         f"현재가는 {current:,.0f}입니다. 삭제 후 실제 매수단가로 다시 등록하세요."
                     )),
                     "status": "입력 오류",
